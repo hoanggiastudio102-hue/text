@@ -56,7 +56,7 @@ def run(source_lang="auto", target_lang="en", gdoc_url="", text_file="", profile
             with open(text_file, "r", encoding="utf-8") as f:
                 all_doc_text = f.read().strip()
 
-        if not all_doc_text.strip():
+        if mode != "batch" and not all_doc_text.strip():
             print("❌ LỖI: Không có văn bản nào để xử lý.")
             browser.close()
             return
