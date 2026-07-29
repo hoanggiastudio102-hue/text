@@ -235,60 +235,60 @@ Nội dung cần dịch:
                     page.keyboard.insert_text(full_prompt)
                     time.sleep(1)
                 
-                prev_responses_count = len(page.query_selector_all(response_selector))
-                page.keyboard.press("Enter")
-                print("📤 Đã gửi yêu cầu! Bắt đầu đếm ngược thời gian phản hồi...")
+                    prev_responses_count = len(page.query_selector_all(response_selector))
+                    page.keyboard.press("Enter")
+                    print("📤 Đã gửi yêu cầu! Bắt đầu đếm ngược thời gian phản hồi...")
                 
-                start_time = time.time()
-                try:
-                    page.wait_for_function(f"document.querySelectorAll('{response_selector}').length > {prev_responses_count}", timeout=45000)
-                except Exception:
-                    print("⚠️ Gemini phản hồi chậm, vẫn đang tiếp tục theo dõi...")
+                    start_time = time.time()
+                    try:
+                        page.wait_for_function(f"document.querySelectorAll('{response_selector}').length > {prev_responses_count}", timeout=45000)
+                    except Exception:
+                        print("⚠️ Gemini phản hồi chậm, vẫn đang tiếp tục theo dõi...")
                 
-                print("✍️ Gemini đang tiến hành viết nội dung. Đang theo dõi tiến độ...")
-                last_text_length = 0
-                unchanged_count = 0
-                spawn_wait = 0
-                max_spawn_wait = 60 # 120s max to wait for the first character
+                    print("✍️ Gemini đang tiến hành viết nội dung. Đang theo dõi tiến độ...")
+                    last_text_length = 0
+                    unchanged_count = 0
+                    spawn_wait = 0
+                    max_spawn_wait = 60 # 120s max to wait for the first character
                 
-                while unchanged_count < 8: # Wait 16s of no change to consider finished
-                    time.sleep(2)
-                    elements = page.query_selector_all(response_selector)
+                    while unchanged_count < 8: # Wait 16s of no change to consider finished
+                        time.sleep(2)
+                        elements = page.query_selector_all(response_selector)
                     
-                    if len(elements) <= prev_responses_count:
-                        spawn_wait += 1
-                        if spawn_wait > max_spawn_wait:
-                            print("❌ LỖI: Quá thời gian, Gemini không tạo ra câu trả lời mới.")
-                            break
-                        continue
+                        if len(elements) <= prev_responses_count:
+                            spawn_wait += 1
+                            if spawn_wait > max_spawn_wait:
+                                print("❌ LỖI: Quá thời gian, Gemini không tạo ra câu trả lời mới.")
+                                break
+                            continue
                         
-                    current_response = elements[-1].inner_text()
+                        current_response = elements[-1].inner_text()
                     
-                    if len(current_response) > last_text_length:
-                        print(f"   + Đang viết... (Đã được {len(current_response)} ký tự)")
-                        last_text_length = len(current_response)
-                        unchanged_count = 0
-                    elif len(current_response) == last_text_length and len(current_response) > 0:
-                        unchanged_count += 1
-                        print(f"   - Không có thay đổi ({unchanged_count}/8)...")
-                    else:
-                        # Case len == 0 (Gemini rendered the box but no text yet)
-                        pass
+                        if len(current_response) > last_text_length:
+                            print(f"   + Đang viết... (Đã được {len(current_response)} ký tự)")
+                            last_text_length = len(current_response)
+                            unchanged_count = 0
+                        elif len(current_response) == last_text_length and len(current_response) > 0:
+                            unchanged_count += 1
+                            print(f"   - Không có thay đổi ({unchanged_count}/8)...")
+                        else:
+                            # Case len == 0 (Gemini rendered the box but no text yet)
+                            pass
                 
-                end_time = time.time()
-                elapsed_time = round(end_time - start_time, 1)
+                    end_time = time.time()
+                    elapsed_time = round(end_time - start_time, 1)
                 
-                final_elements = page.query_selector_all(response_selector)
-                content = final_elements[-1].inner_text()
+                    final_elements = page.query_selector_all(response_selector)
+                    content = final_elements[-1].inner_text()
                 
-                print(f"✅ ĐÃ HOÀN THÀNH PHẦN {idx+1}/{len(chunks)}")
-                print(f"⏱️ Thời gian xử lý: {elapsed_time} giây.")
-                print(f"📄 Khối lượng kết quả: {len(content)} ký tự.")
+                    print(f"✅ ĐÃ HOÀN THÀNH PHẦN {idx+1}/{len(chunks)}")
+                    print(f"⏱️ Thời gian xử lý: {elapsed_time} giây.")
+                    print(f"📄 Khối lượng kết quả: {len(content)} ký tự.")
                 
-                f_out.write(content + "\n\n")
+                    f_out.write(content + "\n\n")
                 
-                print("✔️ Lưu thành công phần này!")
-                time.sleep(3)
+                    print("✔️ Lưu thành công phần này!")
+                    time.sleep(3)
                 
             print(f"🎉 ĐÃ HOÀN THÀNH TOÀN BỘ FILE: {filename}")
 
