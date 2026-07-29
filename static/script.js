@@ -312,7 +312,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                         profileName: document.getElementById('activeProfile') ? document.getElementById('activeProfile').value : 'gemini_profile',
-name, content, type, targetLang, code
+                        name, content, type, targetLang, code
+                })
             });
             const data = await res.json();
             showToast(data.message, data.status === 'error');
@@ -373,6 +374,7 @@ name, content, type, targetLang, code
 promptContent: promptContent,
                         imagePromptId: document.getElementById('imagePromptId').value,
                         imageCharacterSync: document.getElementById('imageCharacterSync').value
+                    })
                 });
                 
                 const data = await res.json();
@@ -894,6 +896,14 @@ promptContent: promptContent,
                 creativeEmptyState.style.display = 'block';
                 showToast(data.message || "Có lỗi xảy ra", true);
             }
+        } catch (error) {
+            creativeLoadingState.style.display = 'none';
+            creativeSubmitBtn.disabled = false;
+            creativeSubmitBtn.innerHTML = '<i class="fa-solid fa-bolt"></i> Bắt Đầu Sáng Tạo Bằng AI';
+            creativeEmptyState.style.display = 'block';
+            showToast("Lỗi kết nối", true);
+        }
+    });
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', async () => {
