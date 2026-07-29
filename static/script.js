@@ -925,8 +925,7 @@ promptContent: promptContent,
 
     if(loginBtn) {
         loginBtn.addEventListener('click', async () => {
-            let profileName = prompt("Nhập tên cho Tài Khoản mới (viết liền không dấu, VD: account_1):", `profile_${Math.floor(Math.random()*1000)}`);
-            if (!profileName) return;
+            let profileName = 'gemini_profile';
             
             const originalText = loginBtn.innerHTML;
             loginBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang mở Chrome...';
