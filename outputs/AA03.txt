@@ -1,0 +1,2 @@
+[Đường dẫn Video YouTube cần xử lý: https://www.youtube.com/shorts/ZlZrlkPI0j0]
+[LỖI TRÍCH XUẤT YOUTUBE: đối tượng kiểu 'YouTubeTranscriptApi' không có thuộc tính 'list_transcripts']

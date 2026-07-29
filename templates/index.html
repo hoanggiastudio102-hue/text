@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vinh Global - Premium Text Translator</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="glass-bg"></div>
+    <div class="container">
+        <!-- Header -->
+        <header class="header" style="position: relative;">
+            <div class="logo">
+                <div class="logo-icon"><i class="fa-solid fa-language"></i></div>
+                <h1>Vinh Global <span>Premium Translator</span></h1>
+            </div>
+            <p class="subtitle">Công cụ hỗ trợ xử lý và dịch thuật văn bản cao cấp.</p>
+            
+            <div class="login-container" style="position: absolute; top: 10px; right: 0;">
+                <button id="loginBtn" class="btn-primary" style="background: rgba(16, 185, 129, 0.1); border-color: var(--success); color: var(--success); padding: 8px 16px; font-size: 13px;">
+                    <i class="fa-brands fa-google"></i> Đăng nhập
+                </button>
+            </div>
+        </header>
+
+        <!-- Tabs -->
+        <div class="tabs-container">
+            <button class="tab-btn active" data-tab="tab-translate"><i class="fa-solid fa-language"></i> Dịch Thuật Đơn</button>
+            <button class="tab-btn" data-tab="tab-batch"><i class="fa-solid fa-layer-group"></i> Dịch Hàng Loạt</button>
+            <button class="tab-btn" data-tab="tab-creative"><i class="fa-solid fa-wand-magic-sparkles"></i> Sáng Tạo</button>
+            <button class="tab-btn" data-tab="tab-image"><i class="fa-solid fa-image"></i> Tạo Ảnh</button>
+            <button class="tab-btn" data-tab="tab-history"><i class="fa-solid fa-clock-rotate-left"></i> Lịch Sử</button>
+            <button class="tab-btn" data-tab="tab-prompts"><i class="fa-solid fa-feather"></i> Prompt</button>
+            <button class="tab-btn" data-tab="tab-logs"><i class="fa-solid fa-terminal"></i> Nhật Ký</button>
+        </div>
+
+        <!-- Main Workspace (Single Translate) -->
+        <div id="tab-translate" class="workspace tab-content active">
+            <div class="card input-section">
+                <h2><i class="fa-solid fa-keyboard"></i> Nhập Thông Tin Đầu Vào</h2>
+                
+                <form id="translatorForm">
+                    <!-- Source Language -->
+                    <div class="form-group">
+                        <label for="sourceLang">Quốc gia / Ngôn ngữ Input (Nguồn):</label>
+                        <select id="sourceLang" name="sourceLang" class="glass-input">
+                            <option value="auto">🔍 Tự động phát hiện (Auto-detect)</option>
+                            <option value="en">🇺🇸 Tiếng Anh (English)</option>
+                            <option value="vi">🇻🇳 Tiếng Việt (Vietnamese)</option>
+                            <option value="ja">🇯🇵 Tiếng Nhật (Japanese)</option>
+                            <option value="ko">🇰🇷 Tiếng Hàn (Korean)</option>
+                            <option value="zh">🇨🇳 Tiếng Trung (Chinese)</option>
+                            <option value="fr">🇫🇷 Tiếng Pháp (French)</option>
+                        </select>
+                    </div>
+
+                    <!-- Target Language -->
+                    <div class="form-group">
+                        <label for="targetLang">Quốc gia / Ngôn ngữ Output (Đích):</label>
+                        <select id="targetLang" name="targetLang" class="glass-input">
+                            <option value="en">🇺🇸 Tiếng Anh (English)</option>
+                            <option value="vi">🇻🇳 Tiếng Việt (Vietnamese)</option>
+                            <option value="ja">🇯🇵 Tiếng Nhật (Japanese)</option>
+                            <option value="ko">🇰🇷 Tiếng Hàn (Korean)</option>
+                            <option value="zh">🇨🇳 Tiếng Trung (Chinese)</option>
+                            <option value="fr">🇫🇷 Tiếng Pháp (French)</option>
+                        </select>
+                    </div>
+
+                    <!-- Prompt Template -->
+                    <div class="form-group">
+                        <label for="promptSelect">Mẫu Lệnh (Prompt Template):</label>
+                        <select id="promptSelect" name="promptId" class="glass-input">
+                            <option value="default">Đang tải...</option>
+                        </select>
+                    </div>
+
+                    <!-- Chunk Size -->
+                    <div class="form-group">
+                        <label for="chunkSize" style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>Dung lượng cắt mỗi lần dịch (Chế độ thông minh):</span>
+                            <span style="font-size: 11px; color: #9ca3af; font-weight: normal;">Khuyên dùng Auto</span>
+                        </label>
+                        <select id="chunkSize" name="chunkSize" class="glass-input">
+                            <option value="auto">🌟 Auto (Tự động nhận diện đoạn/câu - Khuyên dùng)</option>
+                            <option value="15000">15,000 ký tự (Chế độ cắt mảng lớn)</option>
+                            <option value="5000">5,000 ký tự (Chế độ cắt mảng vừa)</option>
+                            <option value="3000">3,000 ký tự (Chế độ cắt mảng nhỏ)</option>
+                        </select>
+                    </div>
+
+                    <!-- GDrive Link -->
+                    <div class="form-group">
+                        <label for="gdocUrl"><i class="fa-brands fa-google-drive icon-gdrive"></i> Link Google Drive (Có thể dán nhiều link, mỗi link 1 dòng):</label>
+                        <textarea id="gdocUrl" name="gdocUrl" class="glass-input" rows="2" placeholder="https://docs.google.com/document/d/..."></textarea>
+                    </div>
+
+                    <!-- YouTube Link -->
+                    <div class="form-group">
+                        <label for="ytUrl"><i class="fa-brands fa-youtube icon-youtube" style="color: #ef4444;"></i> Link YouTube (Có thể dán nhiều link, mỗi link 1 dòng):</label>
+                        <textarea id="ytUrl" name="ytUrl" class="glass-input" rows="2" placeholder="https://www.youtube.com/watch?v=..."></textarea>
+                    </div>
+
+                    <!-- File Dropzone -->
+                    <div class="form-group">
+                        <label><i class="fa-solid fa-file-arrow-up icon-file"></i> Tải lên file (.txt):</label>
+                        <div id="dropZone" class="drop-zone">
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                            <p>Kéo thả các file .txt vào đây hoặc <span>Click để chọn</span></p>
+                            <input type="file" id="fileInput" accept=".txt" multiple style="display: none;">
+                        </div>
+                        <div id="fileList" class="file-list"></div>
+                    </div>
+
+                    <!-- Raw Text -->
+                    <div class="form-group">
+                        <label for="rawText">
+                            <i class="fa-solid fa-align-left icon-text"></i> Dán văn bản trực tiếp 
+                            <span id="charCount" class="char-count">0 / 100,000 ký tự</span>
+                        </label>
+                        <textarea id="rawText" name="rawText" class="glass-input" rows="6" maxlength="100000" placeholder="Dán văn bản cần dịch vào đây..."></textarea>
+                    </div>
+
+                    <!-- Custom Filename -->
+                    <div class="form-group">
+                        <label for="customFilename"><i class="fa-solid fa-file-signature"></i> Tên file lưu (Tuỳ chọn):</label>
+                        <input type="text" id="customFilename" name="customFilename" class="glass-input" placeholder="Nhập tên file bạn muốn (VD: KichBan)...">
+                    </div>
+
+                    <!-- Submit Action -->
+                    <div class="action-bar">
+                        <button type="submit" id="submitBtn" class="btn-glow">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Dịch Thuật & Hoàn Thiện
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Output Section -->
+            <div class="card output-section">
+                <h2><i class="fa-solid fa-file-export"></i> Kết Quả Đầu Ra</h2>
+                <div id="loadingState" class="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Hệ thống đang xử lý, vui lòng đợi...</p>
+                    <div class="log-container">
+                        <h4><i class="fa-solid fa-terminal"></i> Terminal Logs</h4>
+                        <pre id="botLogs">Đang khởi động Bot...</pre>
+                    </div>
+                </div>
+                
+                <div id="resultState" class="result" style="display: none;">
+                    <div class="success-banner">
+                        <i class="fa-solid fa-circle-check"></i> Đã xử lý thành công!
+                    </div>
+                    
+                    <label>Xem trước (Preview):</label>
+                    <textarea id="previewOutput" class="glass-input" rows="10" readonly></textarea>
+                    
+                    <div id="processingTimeInfo" style="margin-top: 15px; font-size: 13px; color: var(--success); text-align: center;"></div>
+                    
+                    <div class="action-bar" style="margin-top: 10px;">
+                        <a id="downloadBtn" href="#" class="btn-primary" download>
+                            <i class="fa-solid fa-download"></i> Tải xuống File Text
+                        </a>
+                    </div>
+                    
+                    <!-- Quick History -->
+                    <div class="quick-history" style="margin-top: 25px; padding-top: 15px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <h4 style="color: var(--text-main); font-size: 15px; margin: 0;"><i class="fa-solid fa-clock-rotate-left"></i> Lịch Sử Nhanh (10 File)</h4>
+                            <button class="btn-primary" onclick="loadMiniHistory()" style="padding: 4px 10px; font-size: 12px; background: rgba(255,255,255,0.1);"><i class="fa-solid fa-rotate"></i> Tải lại</button>
+                        </div>
+                        <div class="table-container">
+                            <table class="pro-table">
+                                <thead>
+                                    <tr>
+                                        <th>Thời gian</th>
+                                        <th>Thao tác</th>
+                                        <th>Tên File</th>
+                                        <th>Tốc độ</th>
+                                        <th style="text-align: center;">Tải về</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="quickHistoryList">
+                                    <!-- Render history here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="emptyState" class="empty-state">
+                    <i class="fa-solid fa-box-open"></i>
+                    <p>Chưa có dữ liệu nào. Hãy nhập thông tin và chạy Bot.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Batch Workspace -->
+        <div id="tab-batch" class="workspace tab-content" style="display: none;">
+            <div class="card input-section">
+                <h2><i class="fa-solid fa-layer-group"></i> Nhập Dữ Liệu Hàng Loạt</h2>
+                
+                <form id="batchForm">
+                    <div class="form-group">
+                        <label for="batchSourceLang">Quốc gia / Ngôn ngữ Input (Nguồn):</label>
+                        <select id="batchSourceLang" name="batchSourceLang" class="glass-input">
+                            <option value="auto">🔍 Tự động phát hiện (Auto-detect)</option>
+                            <option value="en">🇺🇸 Tiếng Anh (English)</option>
+                            <option value="vi">🇻🇳 Tiếng Việt (Vietnamese)</option>
+                            <option value="ja">🇯🇵 Tiếng Nhật (Japanese)</option>
+                            <option value="ko">🇰🇷 Tiếng Hàn (Korean)</option>
+                            <option value="zh">🇨🇳 Tiếng Trung (Chinese)</option>
+                            <option value="fr">🇫🇷 Tiếng Pháp (French)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="batchTargetLang">Quốc gia / Ngôn ngữ Output (Đích):</label>
+                        <select id="batchTargetLang" name="batchTargetLang" class="glass-input">
+                            <option value="en">🇺🇸 Tiếng Anh (English)</option>
+                            <option value="vi">🇻🇳 Tiếng Việt (Vietnamese)</option>
+                            <option value="ja">🇯🇵 Tiếng Nhật (Japanese)</option>
+                            <option value="ko">🇰🇷 Tiếng Hàn (Korean)</option>
+                            <option value="zh">🇨🇳 Tiếng Trung (Chinese)</option>
+                            <option value="fr">🇫🇷 Tiếng Pháp (French)</option>
+                        </select>
+                    </div>
+
+                    <!-- Prompt Template -->
+                    <div class="form-group">
+                        <label for="batchPromptSelect">Mẫu Lệnh (Prompt Template):</label>
+                        <select id="batchPromptSelect" name="promptId" class="glass-input">
+                            <option value="default">Đang tải...</option>
+                        </select>
+                    </div>
+
+                    <!-- Chunk Size -->
+                    <div class="form-group">
+                        <label for="batchChunkSize" style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>Dung lượng cắt mỗi lần dịch (Chế độ thông minh):</span>
+                            <span style="font-size: 11px; color: #9ca3af; font-weight: normal;">Khuyên dùng Auto</span>
+                        </label>
+                        <select id="batchChunkSize" name="batchChunkSize" class="glass-input">
+                            <option value="auto">🌟 Auto (Tự động nhận diện đoạn/câu - Khuyên dùng)</option>
+                            <option value="15000">15,000 ký tự (Chế độ cắt mảng lớn)</option>
+                            <option value="5000">5,000 ký tự (Chế độ cắt mảng vừa)</option>
+                            <option value="3000">3,000 ký tự (Chế độ cắt mảng nhỏ)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="batchLinks"><i class="fa-solid fa-link"></i> Danh sách Links (Mỗi link 1 dòng):</label>
+                        <textarea id="batchLinks" name="batchLinks" class="glass-input" rows="4" placeholder="Dán link GDrive hoặc YouTube vào đây..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fa-solid fa-file-arrow-up icon-file"></i> Tải lên nhiều file (.txt):</label>
+                        <div id="batchDropZone" class="drop-zone">
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                            <p>Kéo thả các file .txt vào đây hoặc <span>Click để chọn</span></p>
+                            <input type="file" id="batchFileInput" accept=".txt" multiple style="display: none;">
+                        </div>
+                        <div id="batchFileList" class="file-list"></div>
+                    </div>
+
+                    <div class="action-bar">
+                        <button type="submit" id="batchSubmitBtn" class="btn-glow">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Dịch Hàng Loạt
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="card output-section">
+                <h2><i class="fa-solid fa-file-export"></i> Kết Quả Hàng Loạt</h2>
+                <div id="batchLoadingState" class="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Hệ thống đang xử lý hàng loạt, vui lòng kiểm tra Nhật ký hệ thống...</p>
+                </div>
+                
+                <div id="batchResultState" class="result" style="display: none;">
+                    <div class="success-banner">
+                        <i class="fa-solid fa-circle-check"></i> Đã xử lý thành công toàn bộ!
+                    </div>
+                    
+                    <p style="color: var(--text-muted); margin-bottom: 20px;">Tất cả các file đã được dịch và đóng gói thành file ZIP.</p>
+                    
+                    <div class="action-bar">
+                        <a id="batchDownloadBtn" href="#" class="btn-primary" download>
+                            <i class="fa-solid fa-download"></i> Tải xuống ZIP
+                        </a>
+                    </div>
+                </div>
+                
+                <div id="batchEmptyState" class="empty-state">
+                    <i class="fa-solid fa-box-open"></i>
+                    <p>Chưa có dữ liệu nào. Hãy nhập thông tin và chạy Bot.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Creative Workspace -->
+        <div id="tab-creative" class="workspace tab-content" style="display: none;">
+            <div class="card input-section">
+                <h2><i class="fa-solid fa-wand-magic-sparkles"></i> Trợ lý Sáng Tạo Thông Minh</h2>
+                <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">AI sẽ tự động đọc toàn bộ kho Prompt của bạn, chia nhỏ nội dung thành các phân đoạn vừa phải, và TỰ CHỌN phong cách văn viết phù hợp nhất cho mỗi đoạn để tạo ra nội dung hấp dẫn, không trùng lặp.</p>
+                
+                <form id="creativeForm">
+                    <!-- Source Language -->
+                    <div class="form-group">
+                        <label for="creativeSourceLang">Quốc gia / Ngôn ngữ Input (Nguồn):</label>
+                        <select id="creativeSourceLang" name="creativeSourceLang" class="glass-input">
+                            <option value="auto">🔍 Tự động phát hiện (Auto-detect)</option>
+                            <option value="en">🇺🇸 Tiếng Anh (English)</option>
+                            <option value="vi">🇻🇳 Tiếng Việt (Vietnamese)</option>
+                            <option value="ja">🇯🇵 Tiếng Nhật (Japanese)</option>
+                            <option value="ko">🇰🇷 Tiếng Hàn (Korean)</option>
+                            <option value="zh">🇨🇳 Tiếng Trung (Chinese)</option>
+                            <option value="fr">🇫🇷 Tiếng Pháp (French)</option>
+                        </select>
+                    </div>
+
+                    <!-- Target Language -->
+                    <div class="form-group">
+                        <label for="creativeTargetLang">Quốc gia / Ngôn ngữ Output (Đích):</label>
+                        <select id="creativeTargetLang" name="creativeTargetLang" class="glass-input">
+                            <option value="en">🇺🇸 Tiếng Anh (English)</option>
+                            <option value="vi">🇻🇳 Tiếng Việt (Vietnamese)</option>
+                            <option value="ja">🇯🇵 Tiếng Nhật (Japanese)</option>
+                            <option value="ko">🇰🇷 Tiếng Hàn (Korean)</option>
+                            <option value="zh">🇨🇳 Tiếng Trung (Chinese)</option>
+                            <option value="fr">🇫🇷 Tiếng Pháp (French)</option>
+                        </select>
+                    </div>
+
+                    <!-- Chunk Size -->
+                    <div class="form-group">
+                        <label for="creativeChunkSize" style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>Độ dài mỗi phân đoạn (Ký tự):</span>
+                            <span style="font-size: 11px; color: #9ca3af; font-weight: normal;">Khuyên dùng phân đoạn vừa (~3000-4000)</span>
+                        </label>
+                        <select id="creativeChunkSize" name="creativeChunkSize" class="glass-input">
+                            <option value="auto">🌟 Linh hoạt (Khuyên dùng cho Ultra - Tự động nhận diện ngắt chương/phần)</option>
+                            <option value="10000">10,000 ký tự (Giới hạn an toàn)</option>
+                            <option value="5000">5,000 ký tự (Phân đoạn ngắn)</option>
+                        </select>
+                    </div>
+
+                    <!-- Detail Level -->
+                    <div class="form-group">
+                        <label for="creativeDetailLevel" style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>Mức độ chi tiết đầu ra (Dành cho nội dung dài như Voice/Podcast):</span>
+                        </label>
+                        <select id="creativeDetailLevel" name="creativeDetailLevel" class="glass-input">
+                            <option value="expand">🔥 Phân tích sâu & Kéo dài (Cam kết viết dài hơn hoặc bằng bản gốc)</option>
+                            <option value="normal">Giữ nguyên dung lượng (Tương đương bản gốc)</option>
+                            <option value="summarize">Ngắn gọn, súc tích (Lọc ý chính)</option>
+                        </select>
+                    </div>
+
+                    <!-- GDrive Link -->
+                    <div class="form-group">
+                        <label for="creativeGdocUrl"><i class="fa-brands fa-google-drive icon-gdrive"></i> Link Google Drive (Có thể dán nhiều link):</label>
+                        <input type="text" id="creativeGdocUrl" name="creativeGdocUrl" class="glass-input" placeholder="https://docs.google.com/document/d/...">
+                    </div>
+
+                    <!-- Custom Prompt Selection -->
+                    <div class="form-group">
+                        <label style="display: flex; justify-content: space-between; align-items: center;">
+                            <span><i class="fa-solid fa-check-double"></i> Chọn Mẫu Prompt để Sáng Tạo:</span>
+                        </label>
+                        <div id="creativePromptChecklist" style="max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 10px;">
+                            <!-- Checkboxes populated via JS -->
+                        </div>
+                    </div>
+
+                    <!-- YouTube Link -->
+                    <div class="form-group">
+                        <label for="creativeYtUrl"><i class="fa-brands fa-youtube icon-youtube" style="color: #ef4444;"></i> Link YouTube (Có thể dán nhiều link, mỗi link 1 dòng):</label>
+                        <textarea id="creativeYtUrl" name="creativeYtUrl" class="glass-input" rows="2" placeholder="https://www.youtube.com/watch?v=..."></textarea>
+                    </div>
+
+                    <!-- File Dropzone -->
+                    <div class="form-group">
+                        <label><i class="fa-solid fa-file-arrow-up icon-file"></i> Tải lên file (.txt):</label>
+                        <div id="creativeDropZone" class="drop-zone">
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                            <p>Kéo thả các file .txt vào đây hoặc <span>Click để chọn</span></p>
+                            <input type="file" id="creativeFileInput" accept=".txt" multiple style="display: none;">
+                        </div>
+                        <div id="creativeFileList" class="file-list"></div>
+                    </div>
+
+                    <!-- Raw Text -->
+                    <div class="form-group">
+                        <label for="creativeRawText">
+                            <i class="fa-solid fa-align-left icon-text"></i> Dán nội dung trực tiếp
+                        </label>
+                        <textarea id="creativeRawText" name="creativeRawText" class="glass-input" rows="8" placeholder="Dán văn bản gốc cần sáng tạo lại vào đây..."></textarea>
+                    </div>
+
+                    <!-- Custom Filename -->
+                    <div class="form-group">
+                        <label for="creativeFilename"><i class="fa-solid fa-file-signature"></i> Tên file lưu (Tuỳ chọn):</label>
+                        <input type="text" id="creativeFilename" name="creativeFilename" class="glass-input" placeholder="VD: Bai_Viet_Sang_Tao_1">
+                    </div>
+
+                    <!-- Submit Action -->
+                    <div class="action-bar">
+                        <button type="submit" id="creativeSubmitBtn" class="btn-glow" style="background: linear-gradient(90deg, #8b5cf6, #3b82f6);">
+                            <i class="fa-solid fa-bolt"></i> Bắt Đầu Sáng Tạo Bằng AI
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Output Section -->
+            <div class="card output-section">
+                <h2><i class="fa-solid fa-book-open"></i> Tác Phẩm Đầu Ra</h2>
+                <div id="creativeLoadingState" class="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>AI đang đọc dữ liệu, lựa chọn Prompt và sáng tác...</p>
+                    <div class="log-container">
+                        <h4><i class="fa-solid fa-terminal"></i> Terminal Logs</h4>
+                        <pre id="creativeLogs">Đang khởi động Bot Sáng Tạo...</pre>
+                    </div>
+                </div>
+                
+                <div id="creativeResultState" class="result" style="display: none;">
+                    <div class="success-banner">
+                        <i class="fa-solid fa-circle-check"></i> Hoàn tất sáng tạo tác phẩm!
+                    </div>
+                    
+                    <label>Xem trước (Preview):</label>
+                    <textarea id="creativePreviewOutput" class="glass-input" rows="12" readonly></textarea>
+                    
+                    <div class="action-bar" style="margin-top: 10px;">
+                        <a id="creativeDownloadBtn" href="#" class="btn-primary" download>
+                            <i class="fa-solid fa-download"></i> Tải xuống Tác Phẩm
+                        </a>
+                    </div>
+                </div>
+                
+                <div id="creativeEmptyState" class="empty-state">
+                    <i class="fa-solid fa-wand-magic"></i>
+                    <p>Chưa có dữ liệu. Hãy dán nội dung gốc để AI bắt đầu nhào nặn.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Image Workspace -->
+        <div id="tab-image" class="workspace tab-content" style="display: none;">
+            <!-- Left: Config -->
+            <div class="card input-section">
+                <h2><i class="fa-solid fa-image"></i> Cấu Hình Tạo Ảnh</h2>
+                <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">Nhập câu lệnh để AI tạo ảnh cho bạn. Nên dùng tiếng Anh để có kết quả tốt nhất.</p>
+                
+                <form id="imageForm">
+                    <!-- Phong cách ảnh -->
+                    <div class="form-group">
+                        <label for="imagePromptId"><i class="fa-solid fa-palette"></i> Mẫu Phong Cách Ảnh:</label>
+                        <select id="imagePromptId" name="imagePromptId" class="glass-input">
+                            <option value="default">✨ Không dùng mẫu (Dùng nguyên văn lệnh của bạn)</option>
+                        </select>
+                    </div>
+
+                    <!-- Đồng bộ nhân vật -->
+                    <div class="form-group">
+                        <label for="imageCharacterSync"><i class="fa-solid fa-user-astronaut"></i> Đồng bộ Ngoại hình Nhân vật (Tùy chọn):</label>
+                        <textarea id="imageCharacterSync" class="glass-input" rows="3" placeholder="Ví dụ: Một cô gái Châu Á 25 tuổi, tóc ngắn màu xanh dương, đeo kính râm..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="imagePromptContent"><i class="fa-solid fa-clapperboard"></i> Bối cảnh / Hành động (Mô tả chi tiết):</label>
+                        <textarea id="imagePromptContent" class="glass-input" rows="5" placeholder="Ví dụ: Đang uống cà phê dưới trời mưa tại Tokyo..." required></textarea>
+                    </div>
+                    
+                    <button type="submit" id="imageSubmitBtn" class="btn-primary" style="width: 100%; justify-content: center;">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Tạo Ảnh Tự Động
+                    </button>
+                </form>
+            </div>
+            
+            <!-- Right: Result -->
+            <div class="card output-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h2><i class="fa-solid fa-images"></i> Kết Quả Tạo Ảnh</h2>
+                </div>
+                
+                <div id="imageResultContainer" style="display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; align-items: center; min-height: 300px; background: rgba(0,0,0,0.2); border-radius: 12px; padding: 20px;">
+                    <div class="empty-state">
+                        <i class="fa-solid fa-image"></i>
+                        <p>Chưa có ảnh nào. Hãy nhập lệnh và bấm tạo ảnh.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- History Workspace -->
+        <div id="tab-history" class="workspace tab-content" style="display: none;">
+            <div class="card" style="grid-column: 1 / -1;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2><i class="fa-solid fa-clock-rotate-left"></i> Lịch Sử Các File Đã Hoàn Thiện</h2>
+                    <button class="btn-primary" onclick="loadHistory()" style="background: rgba(255,255,255,0.1);"><i class="fa-solid fa-rotate"></i> Tải lại dữ liệu</button>
+                </div>
+                
+                <div class="table-container" style="margin-top: 20px; overflow-x: auto;">
+                    <table class="pro-table">
+                        <thead>
+                            <tr>
+                                <th>Thời gian</th>
+                                <th>Kích thước</th>
+                                <th>Thao tác</th>
+                                <th>Tên File</th>
+                                <th>Tốc độ</th>
+                                <th style="text-align: center;">Tải về</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody">
+                            <tr><td colspan="4" style="text-align: center;">Đang tải lịch sử...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Prompts Workspace -->
+        <div id="tab-prompts" class="workspace tab-content" style="display: none;">
+            <!-- Danh sách Prompts -->
+            <div class="card input-section">
+                <h2><i class="fa-solid fa-list-check"></i> Kho Mẫu Lệnh (Prompts)</h2>
+                
+                <div class="tabs" style="margin-top: 15px; margin-bottom: 10px; display: flex; gap: 10px;">
+                    <button class="btn-primary prompt-sub-tab active" data-target="list-translate" style="flex: 1; border-radius: 8px; padding: 8px;"><i class="fa-solid fa-language"></i> Dịch Thuật</button>
+                    <button class="btn-primary prompt-sub-tab" data-target="list-creative" style="flex: 1; border-radius: 8px; padding: 8px; background: rgba(255,255,255,0.05); color: var(--text-muted);"><i class="fa-solid fa-wand-magic-sparkles"></i> Sáng Tạo</button>
+                </div>
+                
+                <div id="list-translate" class="prompt-sub-content active" style="display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; padding-right: 5px;">
+                    <div style="text-align: center; color: var(--text-muted);">Đang tải...</div>
+                </div>
+                
+                <div id="list-creative" class="prompt-sub-content" style="display: none; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; padding-right: 5px;">
+                    <div style="text-align: center; color: var(--text-muted);">Chưa có mẫu lệnh sáng tạo nào.</div>
+                </div>
+            </div>
+            
+            <!-- Tạo / Sửa Prompt -->
+            <div class="card output-section">
+                <h2><i class="fa-solid fa-pen-nib"></i> Soạn Thảo Mẫu Lệnh</h2>
+                <form id="promptForm" style="margin-top: 20px;">
+                    <div class="form-group">
+                        <label><i class="fa-solid fa-tag"></i> Tên Mẫu Lệnh:</label>
+                        <input type="text" id="promptName" class="glass-input" required placeholder="VD: Dịch Thuật Chuyên Ngành Y Tế">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fa-solid fa-layer-group"></i> Phân Loại:</label>
+                        <select id="promptType" class="glass-input">
+                            <option value="translate">Dành cho Dịch Thuật (Đơn & Hàng Loạt)</option>
+                            <option value="creative">Dành cho Sáng Tạo</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fa-solid fa-globe"></i> Ngôn ngữ áp dụng:</label>
+                        <select id="promptTargetLang" class="glass-input">
+                            <option value="all">🌍 Tất cả ngôn ngữ (Dùng chung)</option>
+                            <option value="en">🇺🇸 Tiếng Anh (English)</option>
+                            <option value="vi">🇻🇳 Tiếng Việt (Vietnamese)</option>
+                            <option value="ja">🇯🇵 Tiếng Nhật (Japanese)</option>
+                            <option value="ko">🇰🇷 Tiếng Hàn (Korean)</option>
+                            <option value="zh">🇨🇳 Tiếng Trung (Chinese)</option>
+                            <option value="fr">🇫🇷 Tiếng Pháp (French)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fa-solid fa-hashtag"></i> Mã bài / Kênh (Tùy chọn):</label>
+                        <input type="text" id="promptCode" class="glass-input" placeholder="VD: YT-CH1, Tiktok-01... để dễ phân loại">
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <i class="fa-solid fa-terminal"></i> Nội dung Prompt:
+                            <span class="char-count">Dùng [SOURCE_LANG], [TARGET_LANG], [TEXT]</span>
+                        </label>
+                        <textarea id="promptContent" class="glass-input" style="height: 320px; font-family: monospace; line-height: 1.5;" required placeholder="Hãy nhập câu lệnh điều khiển AI vào đây..."></textarea>
+                    </div>
+                    <div class="action-bar" style="display: flex; gap: 15px;">
+                        <button type="button" id="btnNewPrompt" class="btn-primary" style="flex: 1; background: rgba(255,255,255,0.05); color: var(--text-main); border: 1px solid rgba(255,255,255,0.1);">
+                            <i class="fa-solid fa-plus"></i> Tạo Lệnh Mới
+                        </button>
+                        <button type="submit" class="btn-glow" style="flex: 2;">
+                            <i class="fa-solid fa-floppy-disk"></i> Lưu & Kích Hoạt
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Logs Workspace -->
+        <div id="tab-logs" class="workspace tab-content" style="display: none;">
+            <div class="card log-section" style="grid-column: 1 / -1;">
+                <h2><i class="fa-solid fa-server"></i> Nhật Ký Hoạt Động (System Logs)</h2>
+                <div class="log-container" style="max-height: none; height: 60vh;">
+                    <pre id="systemLogs" style="height: 100%; max-height: none; font-size: 14px; white-space: pre-wrap; word-break: break-all; overflow-y: auto; overflow-x: hidden;">Đang tải nhật ký...</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <!-- JS -->
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

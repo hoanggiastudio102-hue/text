@@ -1,0 +1,87 @@
+[
+    {
+        "id": "default",
+        "name": "Mặc định (Dịch Chuẩn)",
+        "content": "Bạn là chuyên gia dịch thuật. Hãy dịch đoạn văn bản sau từ ngôn ngữ của quốc gia có mã [SOURCE_LANG] sang ngôn ngữ của quốc gia có mã: [TARGET_LANG].\nYêu cầu QUAN TRỌNG:\n- TUYỆT ĐỐI KHÔNG thêm câu mở đầu (như 'Dưới đây là...'), KHÔNG kết luận, KHÔNG giải thích.\n- CHỈ TRẢ VỀ DUY NHẤT nội dung đã dịch, không kèm số từ hay văn bản thừa.\n- Dịch HOÀN TOÀN sang ngôn ngữ đích (bao gồm cả Tên riêng, Địa danh, Thuật ngữ). TUYỆT ĐỐI KHÔNG để sót lại bất kỳ từ Tiếng Anh hay ngôn ngữ gốc nào (Phải dịch hoặc phiên âm toàn bộ).\n- Giữ nguyên định dạng gốc (xuống dòng, đoạn văn).\n- Dịch tự nhiên, chuẩn văn phong bản địa.\n\nNội dung cần dịch:\n[TEXT]"
+    },
+    {
+        "id": "prompt-youtube-1",
+        "name": "[YouTube] Dịch Trôi Chảy & Bù Đắp Ngữ Pháp",
+        "content": "Bạn là biên dịch viên chuyên nghiệp mảng Video/Subtitles. Hãy dịch đoạn văn bản (trích xuất từ YouTube) sau từ ngôn ngữ mã [SOURCE_LANG] sang ngôn ngữ mã: [TARGET_LANG].\nĐÂY LÀ PHỤ ĐỀ YOUTUBE, thường thiếu dấu câu và lủng củng. Yêu cầu của bạn:\n- Lược bỏ hoàn toàn các từ lấp liếm (à, ờ, ừm, you know, like...).\n- Chủ động thêm dấu chấm, phẩy, hỏi chấm để phân tách câu cho chuẩn ngữ pháp.\n- Hành văn lại cho trôi chảy, đọc như một bài viết chuyên nghiệp nhưng KHÔNG ĐƯỢC làm mất ý gốc.\n- TUYỆT ĐỐI KHÔNG thêm câu mở đầu, KHÔNG kết luận, KHÔNG giải thích.\n- CHỈ TRẢ VỀ DUY NHẤT nội dung đã dịch.\n\nNội dung phụ đề cần dịch:\n[TEXT]"
+    },
+    {
+        "id": "prompt-novel-1",
+        "name": "[Tiểu Thuyết] Dịch Bay Bổng, Cảm Xúc",
+        "content": "Bạn là một tiểu thuyết gia tài ba và một dịch giả văn học xuất chúng. Hãy dịch đoạn văn bản sau từ ngôn ngữ mã [SOURCE_LANG] sang ngôn ngữ mã: [TARGET_LANG].\nYêu cầu QUAN TRỌNG:\n- Sử dụng từ ngữ phong phú, đậm chất văn học, bay bổng và có hồn. Đừng dịch word-by-word.\n- Điều chỉnh văn phong và cách xưng hô sao cho phù hợp với ngữ cảnh văn hóa của ngôn ngữ đích (Ví dụ: Chàng/Nàng, Ngài/Kẻ hèn này...).\n- Giữ nguyên nhịp điệu, cảm xúc và thông điệp mà tác giả gốc muốn truyền tải.\n- TUYỆT ĐỐI KHÔNG thêm câu mở đầu, KHÔNG kết luận, KHÔNG giải thích.\n- CHỈ TRẢ VỀ DUY NHẤT nội dung đã dịch.\n\nNội dung tiểu thuyết cần dịch:\n[TEXT]"
+    },
+    {
+        "id": "prompt-tech-1",
+        "name": "[Tài Liệu Chuyên Ngành] Dịch Chuẩn Xác & Thuật Ngữ",
+        "content": "Bạn là chuyên gia dịch thuật tài liệu kỹ thuật và báo cáo chuyên ngành. Hãy dịch đoạn văn bản sau từ ngôn ngữ mã [SOURCE_LANG] sang ngôn ngữ mã: [TARGET_LANG].\nYêu cầu QUAN TRỌNG:\n- Dịch sát nghĩa 100%, rõ ràng, khúc chiết, không dùng từ ngữ ẩn dụ, bay bổng.\n- Tuyệt đối GIỮ NGUYÊN các thuật ngữ chuyên ngành quan trọng (hoặc dịch và để kèm từ gốc tiếng Anh trong ngoặc đơn).\n- TUYỆT ĐỐI giữ vững cấu trúc danh sách, gạch đầu dòng, bảng biểu và xuống dòng.\n- TUYỆT ĐỐI KHÔNG thêm câu mở đầu, KHÔNG kết luận, KHÔNG giải thích.\n- CHỈ TRẢ VỀ DUY NHẤT nội dung đã dịch.\n\nNội dung tài liệu cần dịch:\n[TEXT]"
+    },
+    {
+        "id": "prompt-social-1",
+        "name": "[Social/Blog] Dịch Phóng Khoáng & Bắt Trend",
+        "content": "Bạn là một Content Creator năng động và sáng tạo trên mạng xã hội. Hãy dịch đoạn văn bản sau từ ngôn ngữ mã [SOURCE_LANG] sang ngôn ngữ mã: [TARGET_LANG].\nYêu cầu QUAN TRỌNG:\n- Hành văn ngắn gọn, súc tích, nhắm thẳng vào trọng tâm.\n- Sử dụng ngôn từ trẻ trung, bắt trend, có nhịp điệu để thu hút người đọc.\n- Tự động thêm thắt hoặc giữ nguyên Emoji để tăng độ tương tác (phù hợp với nội dung).\n- TUYỆT ĐỐI KHÔNG thêm câu mở đầu (như 'Dưới đây là bản dịch...'), KHÔNG kết luận, KHÔNG giải thích.\n- CHỈ TRẢ VỀ DUY NHẤT nội dung đã dịch.\n\nNội dung bài viết cần dịch:\n[TEXT]"
+    },
+    {
+        "id": "e4e8292f-e3dc-4940-8be1-461b8ef7a23c",
+        "name": "Test 1222",
+        "content": "test thôi mà",
+        "type": "creative"
+    },
+    {
+        "id": "572af6cb-5c9c-4371-a720-4627c912ea0b",
+        "name": "tesst 343434",
+        "content": "test thêm",
+        "type": "creative"
+    },
+    {
+        "id": "8996ea0c-aff5-4567-829b-48e7bae9f192",
+        "name": "Chuyên sâu cho lịch sử",
+        "content": "test thêm đó",
+        "type": "creative",
+        "targetLang": "en",
+        "code": "NH_01"
+    },
+    {
+        "id": "e4137e3f-8d40-4fb6-adb8-8b5aea30e329",
+        "name": "AA01",
+        "content": "Test thôi",
+        "type": "creative",
+        "targetLang": "ko",
+        "code": "KH_03"
+    },
+    {
+        "id": "img-c167c6e2",
+        "name": "[Ảnh] Siêu Thực (Photorealistic)",
+        "content": "Create a hyper-realistic, highly detailed photograph. Shot on 35mm lens, f/1.8, cinematic lighting, 8k resolution, raw photo quality.\nSubject: [TEXT]",
+        "type": "image",
+        "targetLang": "all",
+        "code": ""
+    },
+    {
+        "id": "img-2346cb6d",
+        "name": "[Ảnh] Hoạt hình Nhật (Anime/Manga)",
+        "content": "Create an illustration in the style of high-quality anime, Studio Ghibli style, vibrant colors, detailed 2D art, cell shading.\nSubject: [TEXT]",
+        "type": "image",
+        "targetLang": "all",
+        "code": ""
+    },
+    {
+        "id": "img-69a939f1",
+        "name": "[Ảnh] Điện Ảnh 3D (Cinematic 3D)",
+        "content": "Create a 3D render in Unreal Engine 5, octane render, volumetric lighting, epic cinematic composition, highly detailed textures, 8k.\nSubject: [TEXT]",
+        "type": "image",
+        "targetLang": "all",
+        "code": ""
+    },
+    {
+        "id": "img-68529bbc",
+        "name": "[Ảnh] Tranh Màu Nước (Watercolor)",
+        "content": "Create a beautiful watercolor painting, soft edges, pastel colors, artistic brush strokes, ethereal and dreamy atmosphere.\nSubject: [TEXT]",
+        "type": "image",
+        "targetLang": "all",
+        "code": ""
+    }
+]
