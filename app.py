@@ -140,6 +140,7 @@ def creative_writer():
     yt_url = data.get("ytUrl", "")
     raw_text = data.get("rawText", "")
     custom_filename = data.get("customFilename", "").strip()
+    profile_name = data.get("profileName", "gemini_profile").strip() or "gemini_profile"
     chunk_size = data.get("chunkSize", "auto")
     detail_level = data.get("detailLevel", "expand")
     selected_prompts_json = data.get("selectedPrompts", "[]")
@@ -257,6 +258,7 @@ def translate_single():
     yt_url = data.get("ytUrl", "")
     raw_text = data.get("rawText", "")
     custom_filename = data.get("customFilename", "").strip()
+    profile_name = data.get("profileName", "gemini_profile").strip() or "gemini_profile"
     
     file_contents = ""
     first_filename = "translated"
