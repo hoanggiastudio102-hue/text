@@ -950,6 +950,7 @@ promptContent: promptContent,
             const a = d.account || {};
             const who = [a.name, a.email ? '(' + a.email + ')' : ''].filter(Boolean).join(' ');
             if (who) box.innerHTML = '<i class="fa-solid fa-circle-check"></i> ' + who.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+            else if (a.logged_in === false) box.innerHTML = '<span class="gm-warn">Gemini CHƯA đăng nhập — bấm nút Đăng nhập, đăng nhập Google rồi tắt cửa sổ</span>';
             else if (d.has_profile) box.innerHTML = '<a href="#" id="gmAccRead">Đã đăng nhập — bấm để xem tài khoản nào</a>';
             else box.innerHTML = '<span class="gm-warn">Chưa đăng nhập Gemini</span>';
             const rd = document.getElementById('gmAccRead');

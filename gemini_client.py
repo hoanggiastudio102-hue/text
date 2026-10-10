@@ -316,6 +316,12 @@ class GeminiSession:
                       labels: Array.from(document.querySelectorAll('[aria-label],[title]')).slice(0, 80).map(e => (e.getAttribute('aria-label') || e.getAttribute('title'))),
                       text: (document.body.innerText || '').slice(0, 600)})""")
                     dbg["label"] = label
+                    labs = " | ".join(str(x) for x in dbg.get("labels", []))
+                    if re.search(r"\bsign in\b|đăng nhập", labs + " " + dbg.get("text", ""), re.I):
+                        d = load_accounts()
+                        d[self.profile_name] = {"logged_in": False, "at": time.time()}
+                        with open(ACCOUNT_FILE, "w", encoding="utf-8") as f:
+                            json.dump(d, f, ensure_ascii=False)
                     with open(os.path.join(BASE_DIR, "account_debug.json"), "w", encoding="utf-8") as f:
                         json.dump(dbg, f, ensure_ascii=False, indent=1)
                     self.page.screenshot(path=os.path.join(BASE_DIR, "account_debug.png"))
