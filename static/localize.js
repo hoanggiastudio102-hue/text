@@ -60,7 +60,7 @@
                 sel.appendChild(o);
             });
             if (prev) sel.value = prev;
-            if (!sel.options.length) sel.innerHTML = '<option value="">(Chưa có mẫu — tạo ở tab Prompt › Viết Lại)</option>';
+            if (!sel.options.length) sel.innerHTML = '<option value="">(Chưa có phong cách — bấm "Tạo phong cách mới")</option>';
             updateStyleMode();
             if (document.activeElement !== $('gmModel')) $('gmModel').value = d.model || '';
             $('gmThinking').value = d.thinking == null ? 'Cao' : d.thinking;
@@ -74,6 +74,48 @@
         $('lzStyleMode').textContent = o && o.dataset.mode === 'localize' ? 'Chế độ: giữ sát ý gốc, chỉ chỉnh cho tự nhiên' : 'Chế độ: sáng tạo + bản địa hoá';
     }
     $('lzStyle').addEventListener('change', updateStyleMode);
+
+    // ---------- tạo / sửa phong cách ngay trong tab ----------
+    let styleEditId = null; // null = tạo mới
+    async function currentStyle() {
+        const id = $('lzStyle').value;
+        if (!id) return null;
+        const d = await jget('/api/prompts');
+        const list = d.data || d.prompts || d;
+        return (Array.isArray(list) ? list : []).find((p) => p.id === id) || null;
+    }
+    function openStyleModal(p, asCopy) {
+        styleEditId = p && !asCopy ? p.id : null;
+        $('lzStyleModalTitle').textContent = styleEditId ? 'Sửa phong cách' : 'Tạo phong cách mới';
+        $('lzSName').value = p ? (asCopy ? p.name + ' (bản sao)' : p.name) : '';
+        $('lzSMode').value = p && p.mode === 'localize' ? 'localize' : 'rewrite';
+        $('lzSContent').value = p ? p.content : '';
+        $('lzStyleModal').style.display = 'flex';
+    }
+    $('lzStyleNew').addEventListener('click', () => openStyleModal(null));
+    $('lzStyleEdit').addEventListener('click', async () => { const p = await currentStyle(); if (p) openStyleModal(p, false); });
+    $('lzStyleDup').addEventListener('click', async () => { const p = await currentStyle(); if (p) openStyleModal(p, true); });
+    $('lzStyleModalClose').addEventListener('click', () => { $('lzStyleModal').style.display = 'none'; });
+    $('lzStyleDel').addEventListener('click', async () => {
+        const p = await currentStyle();
+        if (!p || !confirm('Xoá phong cách "' + p.name + '"?')) return;
+        await fetch('/api/prompts/' + encodeURIComponent(p.id), { method: 'DELETE' });
+        toast('Đã xoá.');
+        loadLocales();
+    });
+    $('lzSSave').addEventListener('click', async () => {
+        const body = { name: $('lzSName').value, content: $('lzSContent').value, mode: $('lzSMode').value, type: 'rewrite', targetLang: 'all' };
+        const r = await fetch(styleEditId ? '/api/prompts/' + encodeURIComponent(styleEditId) : '/api/prompts', {
+            method: styleEditId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const d = await r.json();
+        if (d.status !== 'success') return toast(d.message || 'Không lưu được.', true);
+        $('lzStyleModal').style.display = 'none';
+        toast(d.message || 'Đã lưu.');
+        const keep = styleEditId;
+        await loadLocales();
+        if (keep) $('lzStyle').value = keep; else $('lzStyle').selectedIndex = $('lzStyle').options.length - 1;
+        updateStyleMode();
+    });
 
     $('gmSave').addEventListener('click', async () => {
         const model = $('gmModel').value.trim();

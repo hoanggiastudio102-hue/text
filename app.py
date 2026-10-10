@@ -629,6 +629,24 @@ def api_save_prompt():
     
     return jsonify({"status": "success", "message": "Đã lưu Mẫu Prompt thành công!"})
 
+@app.route("/api/prompts/<prompt_id>", methods=["PUT"])
+def api_update_prompt(prompt_id):
+    data = request.json or {}
+    name = data.get("name", "").strip()
+    content = data.get("content", "").strip()
+    if not name or not content:
+        return jsonify({"status": "error", "message": "Vui lòng nhập đủ Tên và Nội dung."}), 400
+    prompts = get_prompts()
+    for p in prompts:
+        if p.get("id") == prompt_id:
+            p["name"], p["content"] = name, content
+            if p.get("type") == "rewrite":
+                p["mode"] = "localize" if data.get("mode") == "localize" else "rewrite"
+            save_prompts(prompts)
+            return jsonify({"status": "success", "message": "Đã cập nhật."})
+    return jsonify({"status": "error", "message": "Không tìm thấy mẫu."}), 404
+
+
 @app.route("/api/prompts/<prompt_id>", methods=["DELETE"])
 def api_delete_prompt(prompt_id):
     if prompt_id == "default":

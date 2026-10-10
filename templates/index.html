@@ -501,6 +501,13 @@
                     <div class="form-group">
                         <label for="lzStyle"><span><i class="fa-solid fa-pen-nib"></i> Phong cách tái sáng tạo</span><span id="lzStyleMode" class="char-count"></span></label>
                         <select id="lzStyle" class="glass-input"></select>
+                        <div class="lz-style-tools">
+                            <button type="button" class="btn-primary" id="lzStyleNew"><i class="fa-solid fa-plus"></i> Tạo phong cách mới</button>
+                            <button type="button" class="btn-primary" id="lzStyleEdit"><i class="fa-solid fa-pen"></i> Sửa</button>
+                            <button type="button" class="btn-primary" id="lzStyleDup"><i class="fa-solid fa-copy"></i> Nhân bản</button>
+                            <button type="button" class="btn-primary" id="lzStyleDel"><i class="fa-solid fa-trash"></i> Xoá</button>
+                        </div>
+                        <small class="lz-muted">Muốn thêm yêu cầu riêng cho một lần chạy: dùng ô "Yêu cầu thêm" bên dưới, không cần tạo mẫu.</small>
                     </div>
 
                     <div class="form-group">
@@ -612,6 +619,17 @@
         </div>
 
         <!-- Hộp thoại dùng chung cho tab Tái Sáng Tạo -->
+        <div id="lzStyleModal" class="lz-modal" style="display: none;">
+            <div class="lz-modal-box">
+                <div class="lz-modal-head"><b id="lzStyleModalTitle">Phong cách sáng tạo</b><button type="button" id="lzStyleModalClose" class="btn-primary">Đóng</button></div>
+                <div class="form-group"><label>Tên phong cách</label><input type="text" id="lzSName" class="glass-input" placeholder="VD: Review sản phẩm – chân thật, có ví dụ"></div>
+                <div class="form-group"><label>Chế độ</label>
+                    <select id="lzSMode" class="glass-input"><option value="rewrite">Sáng tạo + bản địa hoá</option><option value="localize">Giữ sát ý gốc + chỉnh cho tự nhiên</option></select></div>
+                <div class="form-group"><label>Hướng dẫn phong cách (có thể dùng [COUNTRY], [LANGUAGE], [AUDIENCE])</label>
+                    <textarea id="lzSContent" class="glass-input" rows="12" placeholder="VD:&#10;- Giọng văn ...&#10;- Cấu trúc ...&#10;- Không bịa số liệu."></textarea></div>
+                <button type="button" class="btn-primary" id="lzSSave"><i class="fa-solid fa-floppy-disk"></i> Lưu phong cách</button>
+            </div>
+        </div>
         <div id="lzModal" class="lz-modal" style="display: none;">
             <div class="lz-modal-box">
                 <div class="lz-modal-head"><b id="lzModalTitle"></b><button type="button" id="lzModalClose" class="btn-primary">Đóng</button></div>
