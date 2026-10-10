@@ -1359,6 +1359,15 @@ def _agent_loop():
                     except Exception as e:
                         fleet.outbox_mark(jid2, False, str(e))
                         _AGENT_STATE["error"] = f"Gửi sản phẩm lỗi: {e}"
+            else:
+                # máy chủ của sếp: tự ghi báo cáo các job đã xong của chính nó (hiện trong tab Đội Máy)
+                for jd in fleet.pending_jobs(JOBS_DIR):
+                    jid2 = os.path.basename(jd)
+                    try:
+                        fleet.save_local_report(jd)
+                        fleet.outbox_mark(jid2, True, "")
+                    except Exception as e:
+                        fleet.outbox_mark(jid2, False, str(e))
         except PermissionError as e:
             _AGENT_STATE["error"] = str(e)
         except Exception as e:

@@ -368,9 +368,9 @@ def summary(days=7):
     total = {"jobs": 0, "units": 0, "errors": 0, "chars": 0, "seconds": 0}
     daily = {}
     for r in reports:
-        p = per.setdefault(r["device_id"], {"id": r["device_id"], "name": r.get("device_name", "?"), "online": False,
-                                            "revoked": True, "jobs": 0, "units": 0, "errors": 0, "chars": 0,
-                                            "seconds": 0, "last": 0})
+        p = per.setdefault(r["device_id"], {"id": r["device_id"], "name": r.get("device_name", "?"), "online": r["device_id"] == HUB_ID,
+                                            "revoked": r["device_id"] != HUB_ID, "jobs": 0, "units": 0, "errors": 0,
+                                            "chars": 0, "seconds": 0, "last": 0})
         for t in (p, total):
             t["jobs"] += 1
             t["units"] += r.get("units_done", 0)
@@ -394,6 +394,34 @@ def summary(days=7):
         "per_device": sorted(per.values(), key=lambda x: -x["units"]),
         "daily": day_list,
     }
+
+
+HUB_ID = "hub"
+HUB_NAME = "Máy sếp (máy chủ)"
+
+
+class _LocalFile:
+    """Giả lập file upload để máy chủ tự lưu báo cáo cho chính nó."""
+    def __init__(self, path):
+        self.path = path
+        self.filename = os.path.basename(path)
+
+    def save(self, dest):
+        shutil.copyfile(self.path, dest)
+
+
+def save_local_report(job_dir):
+    """Máy chủ (chưa ghép cặp với máy nào) tự ghi báo cáo cho các job của chính nó -> hiện trong tab Đội Máy."""
+    meta, zpath = job_report(job_dir)
+    try:
+        save_report({"id": HUB_ID, "name": HUB_NAME}, meta, _LocalFile(zpath) if zpath else None)
+    finally:
+        if zpath:
+            try:
+                os.remove(zpath)
+            except OSError:
+                pass
+    return True
 
 
 def list_reports(device_id=None, limit=300):
