@@ -176,10 +176,10 @@ def process_unit(job, session, article, code, chunks):
             try:
                 fixed = session.ask(locales.build_review_prompt(
                     country, mode=cfg.get("mode", "rewrite"), part=i, parts=len(chunks), has_outline=bool(outline)))
-                if fixed.strip() and len(fixed) >= 0.4 * len(text):
+                if fixed.strip() and len(fixed) >= 0.85 * len(text):
                     text = fixed
                 else:
-                    job.log("   (bản soát lại quá ngắn/rỗng — giữ bản đầu)")
+                    job.log("   (bản soát lại ngắn hơn 85% bản đầu — nghi bị rút gọn, giữ bản đầu)")
             except (GeminiLimitError, GeminiCancelled):
                 raise
             except GeminiError as e:

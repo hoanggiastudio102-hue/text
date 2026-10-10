@@ -368,6 +368,9 @@ def build_review_prompt(country, mode="rewrite", part=1, parts=1, has_outline=Fa
         + ("5) every item of the OUTLINE is covered, in order, with no major off-outline sections, and no sentence "
            "copied from the reference article.\n" if has_outline else
            "5) formatting or structure that drifted from the source.\n") +
+        "6) typos, wrong characters, grammar slips and awkward calques from the source language "
+        "(rewrite them the way a native writer would say it, repeated stock phrases included);\n"
+        "Do NOT shorten: the corrected text must be at least as long and as detailed as the previous one.\n"
         "Fix every problem you find and output the COMPLETE corrected final text for this part. "
         "Output ONLY the final text: no review notes, no list of changes, no preamble."
     )
