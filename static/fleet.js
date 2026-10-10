@@ -31,35 +31,53 @@
             + (j.last_error ? '<br><span style="color:#fca5a5">' + esc(j.last_error) + '</span>' : '');
     }
 
+    const fmtDur = (s) => { s = Math.max(0, Math.round(s || 0)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+        return h + ':' + String(m).padStart(2, '0') + ':' + String(x).padStart(2, '0'); };
+    const num = (n) => (n || 0).toLocaleString('vi-VN');
+
     async function loadHub() {
-        const { ok, status, j } = await jfetch('/api/fleet/admin/overview');
+        const days = $('flRange') ? $('flRange').value : 7;
+        const { ok, j } = await jfetch('/api/fleet/admin/overview?days=' + days);
         const hub = ok && j.status === 'success';
         $('flHubDenied').style.display = hub ? 'none' : '';
         $('flCodeForm').style.display = hub ? '' : 'none';
         $('flHubData').style.display = hub ? '' : 'none';
         if (!hub) return;
-        const dv = j.devices || [];
-        $('flDevices').innerHTML = dv.length ? dv.map(d => {
-            const st = d.state || {};
-            const job = st.job ? '<br><i class="fa-solid fa-spinner fa-spin"></i> Đang chạy job' : '';
-            const login = st.gemini_logged_in === false ? '<br><span style="color:#fcd34d">Chưa đăng nhập Gemini</span>' : '';
-            return `<div class="fl-dev ${d.online ? '' : 'off'}">
-                <div class="nm"><span class="fl-dot ${d.online ? 'on' : ''}"></span>${esc(d.name)}${d.revoked ? ' <span class="lz-muted">(đã thu hồi)</span>' : ''}</div>
-                <div class="meta">${d.online ? 'Đang trực tuyến' : 'Thấy lần cuối: ' + ago(d.last_seen)}${job}${login}<br>
-                ${esc(st.model || '')} ${esc(st.os || '')} ${esc(d.hostname || '')}<br>
-                Đã gửi <b>${d.stats.jobs}</b> job · <b>${d.stats.units}</b> bản · ${(d.stats.chars || 0).toLocaleString('vi-VN')} ký tự</div>
-                <div class="acts">${d.revoked ? '' : `<button class="btn-primary fl-danger" data-act="revoke" data-id="${d.id}">Thu hồi</button>`}
-                <button class="btn-primary" data-act="forget" data-id="${d.id}">Xoá</button></div></div>`;
-        }).join('') : '<div class="lz-muted">Chưa có máy nào ghép.</div>';
+        const sm = j.summary, t = sm.total;
+        $('kJobs').textContent = num(t.jobs);
+        $('kJobsSub').textContent = num(t.units + t.errors) + ' bản trong kỳ';
+        $('kUnits').textContent = num(t.units);
+        $('kUnitsSub').textContent = t.errors ? num(t.errors) + ' bản lỗi' : 'không có bản lỗi';
+        $('kChars').textContent = num(t.chars);
+        $('kTime').textContent = fmtDur(t.seconds);
+        $('flStatusLine').innerHTML = `<span class="fl-dot ${sm.online ? 'on' : ''}"></span> <b>${sm.online}</b>/${sm.devices_total} máy đang kết nối`
+            + (sm.running ? ` · <span style="color:#93c5fd">${sm.running} máy đang chạy job</span>` : '')
+            + (sm.waiting_login ? ` · <span style="color:#fcd34d">${sm.waiting_login} máy chưa đăng nhập Gemini</span>` : '')
+            + (t.errors ? ` · <span style="color:#fca5a5">${t.errors} bản lỗi</span>` : '');
+        const devById = {}; (j.devices || []).forEach(d => devById[d.id] = d);
+        $('flPerDevice').innerHTML = sm.per_device.length ? sm.per_device.map(p => {
+            const d = devById[p.id] || {}; const st = d.state || {};
+            let stat = p.revoked ? '<span class="fl-pill off">Đã thu hồi</span>' : !p.online ? '<span class="fl-pill off">Ngoại tuyến · ' + ago(d.last_seen) + '</span>'
+                : st.job ? '<span class="fl-pill run"><i class="fa-solid fa-spinner fa-spin"></i> Đang chạy</span>'
+                : st.gemini_logged_in === false ? '<span class="fl-pill warn">Chưa đăng nhập Gemini</span>' : '<span class="fl-pill on">Sẵn sàng</span>';
+            return `<tr><td><b>${esc(p.name)}</b><div class="lz-muted">${esc(d.hostname || '')} ${esc(st.model || '')}</div></td><td>${stat}</td>
+                <td>${num(p.jobs)}</td><td>${num(p.units)}</td><td>${p.errors ? '<span style="color:#fca5a5">' + p.errors + '</span>' : 0}</td>
+                <td>${num(p.chars)}</td><td>${fmtDur(p.seconds)}</td><td>${p.last ? fmtT(p.last) : '—'}</td>
+                <td>${p.revoked ? '' : `<button class="btn-primary fl-danger fl-mini" data-act="revoke" data-id="${p.id}">Thu hồi</button>`}
+                <button class="btn-primary fl-mini" data-act="forget" data-id="${p.id}">Xoá</button></td></tr>`;
+        }).join('') : '<tr><td colspan="9" class="lz-muted">Chưa có máy nào ghép. Cấp mã ở ô bên dưới.</td></tr>';
+        const max = Math.max(1, ...sm.daily.map(x => x.units));
+        $('flDaily').innerHTML = sm.daily.map(x => `<div class="fl-drow"><span>${x.day}</span>
+            <div class="fl-bar"><i style="width:${Math.round(x.units / max * 100)}%"></i></div><b>${x.units} bản</b></div>`).join('');
         const rp = j.reports || [];
         $('flReports').innerHTML = rp.length ? rp.map(r => {
             const full = r.units_total && r.units_done === r.units_total;
             return `<tr><td>${fmtT(r.received)}</td><td>${esc(r.device_name)}</td><td>${esc(r.name || (r.articles || []).join(', '))}</td>
                 <td>${esc((r.countries || []).join(' '))}</td>
                 <td><span class="fl-badge ${full ? '' : 'partial'}">${r.units_done}/${r.units_total}</span>${r.units_error ? ' <span class="lz-muted">' + r.units_error + ' lỗi</span>' : ''}</td>
-                <td>${(r.chars || 0).toLocaleString('vi-VN')}</td>
-                <td>${r.file ? `<a class="btn-primary" style="padding:4px 10px;font-size:12px;text-decoration:none" href="/api/fleet/admin/report/${r.device_id}/${r.job_id}/file"><i class="fa-solid fa-download"></i> Tải</a>` : ''}</td></tr>`;
-        }).join('') : '<tr><td colspan="7" class="lz-muted">Chưa có sản phẩm nào.</td></tr>';
+                <td>${num(r.chars)}</td>
+                <td>${r.file ? `<a class="btn-primary fl-mini" style="text-decoration:none" href="/api/fleet/admin/report/${r.device_id}/${r.job_id}/file"><i class="fa-solid fa-download"></i> Tải</a>` : ''}</td></tr>`;
+        }).join('') : '<tr><td colspan="7" class="lz-muted">Chưa có sản phẩm nào trong kỳ này.</td></tr>';
     }
 
     function refresh() { loadAgent().catch(() => { }); loadHub().catch(() => { }); }
@@ -100,7 +118,9 @@
                 o.innerHTML = `<div class="lz-muted">Mã ghép cho máy <b>${esc(j.name)}</b> (15 phút, dùng 1 lần)</div><b>${esc(j.code)}</b>`;
             } else toast(j.message || 'Không cấp được mã', true);
         });
-        $('flDevices').addEventListener('click', async (e) => {
+        $('flRange').addEventListener('change', refresh);
+        $('flRefresh').addEventListener('click', refresh);
+        $('flPerDevice').addEventListener('click', async (e) => {
             const b = e.target.closest('button[data-act]'); if (!b) return;
             const forget = b.dataset.act === 'forget';
             if (!confirm(forget ? 'Xoá máy này khỏi danh sách? (báo cáo cũ vẫn giữ)' : 'Thu hồi máy này? Máy sẽ không gửi được nữa.')) return;

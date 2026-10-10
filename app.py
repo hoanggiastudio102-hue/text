@@ -1044,7 +1044,14 @@ def fleet_overview():
     deny = _admin_only()
     if deny:
         return deny
-    return jsonify({"status": "success", "devices": fleet.list_devices(), "reports": fleet.list_reports(limit=200)})
+    try:
+        days = int(request.args.get("days", 7))
+    except ValueError:
+        days = 7
+    since = time.time() - days * 86400 if days else 0
+    reports = [r for r in fleet.list_reports(limit=500) if r.get("received", 0) >= since]
+    return jsonify({"status": "success", "devices": fleet.list_devices(), "reports": reports,
+                    "summary": fleet.summary(days)})
 
 
 @app.route("/api/fleet/admin/pair-code", methods=["POST"])

@@ -622,11 +622,65 @@
         <!-- History Workspace -->
         <!-- ĐỘI MÁY -->
         <div id="tab-fleet" class="workspace tab-content" style="display: none;">
-            <div class="glass-card fl-wide">
-                <h2><i class="fa-solid fa-network-wired"></i> Đội Máy — Máy Chủ &amp; Máy Nhân Viên</h2>
-                <p class="lz-hint">Mỗi máy nhân viên chạy tool riêng, đăng nhập Gemini riêng trên máy đó. Làm xong, sản phẩm và báo cáo tự gửi về máy chủ của sếp.</p>
+            <div class="fl-dash">
+                <div class="fl-head">
+                    <div>
+                        <h2><i class="fa-solid fa-network-wired"></i> Đội ngũ &amp; sản phẩm</h2>
+                        <p class="lz-hint">Mỗi nhân viên đăng nhập Gemini riêng trên máy mình · sản phẩm và báo cáo tự gửi về máy chủ</p>
+                    </div>
+                    <div class="fl-head-tools">
+                        <select id="flRange" class="glass-input">
+                            <option value="1">Hôm nay</option>
+                            <option value="7" selected>7 ngày</option>
+                            <option value="30">30 ngày</option>
+                            <option value="0">Tất cả</option>
+                        </select>
+                        <button type="button" id="flRefresh" class="btn-primary"><i class="fa-solid fa-rotate"></i> Làm mới</button>
+                    </div>
+                </div>
+
+                <div id="flHubData">
+                    <div class="fl-kpis">
+                        <div class="fl-kpi"><span>JOB HOÀN THÀNH</span><b id="kJobs">0</b><small id="kJobsSub"></small></div>
+                        <div class="fl-kpi"><span>BẢN ĐỊA HOÁ XONG</span><b id="kUnits">0</b><small id="kUnitsSub"></small></div>
+                        <div class="fl-kpi"><span>SỐ KÝ TỰ</span><b id="kChars">0</b><small>tổng nội dung đã xuất</small></div>
+                        <div class="fl-kpi"><span>THỜI GIAN XỬ LÝ</span><b id="kTime">0:00:00</b><small>cộng dồn các máy</small></div>
+                    </div>
+                    <div class="fl-statusline" id="flStatusLine"></div>
+
+                    <section class="fl-card">
+                        <h3>NĂNG SUẤT NHÂN VIÊN</h3>
+                        <div class="fl-tablewrap">
+                            <table class="fl-table"><thead><tr><th>Máy / nhân viên</th><th>Trạng thái</th><th>Job</th><th>Bản xong</th><th>Lỗi</th><th>Ký tự</th><th>Thời gian</th><th>Lần cuối gửi</th><th></th></tr></thead>
+                            <tbody id="flPerDevice"><tr><td colspan="9" class="lz-muted">Chưa có máy nào ghép.</td></tr></tbody></table>
+                        </div>
+                    </section>
+
+                    <section class="fl-card">
+                        <h3>SẢN LƯỢNG THEO NGÀY</h3>
+                        <div id="flDaily" class="fl-daily"></div>
+                    </section>
+
+                    <section class="fl-card">
+                        <h3>SẢN PHẨM &amp; BÁO CÁO GỬI VỀ</h3>
+                        <div class="fl-tablewrap">
+                            <table class="fl-table"><thead><tr><th>Thời gian</th><th>Máy</th><th>Bài</th><th>Quốc gia</th><th>Kết quả</th><th>Ký tự</th><th></th></tr></thead>
+                            <tbody id="flReports"><tr><td colspan="7" class="lz-muted">Chưa có sản phẩm nào.</td></tr></tbody></table>
+                        </div>
+                    </section>
+                </div>
 
                 <div class="fl-grid">
+                    <section class="fl-box" id="flHubBox">
+                        <h3><i class="fa-solid fa-server"></i> Máy chủ — cấp mã ghép máy</h3>
+                        <form id="flCodeForm" class="fl-inline">
+                            <input type="text" id="flDevName" class="glass-input" placeholder="Tên máy: VD NV-An" maxlength="40">
+                            <button type="submit" class="btn-primary"><i class="fa-solid fa-key"></i> Cấp mã</button>
+                        </form>
+                        <div id="flCodeOut" class="fl-code" style="display:none;"></div>
+                        <div id="flHubDenied" class="lz-muted" style="display:none;">Phần máy chủ chỉ hiện khi mở tool trực tiếp trên máy chủ (localhost:5002).</div>
+                    </section>
+
                     <section class="fl-box" id="flAgentBox">
                         <h3><i class="fa-solid fa-plug"></i> Máy này → kết nối máy chủ</h3>
                         <div id="flAgentPaired" style="display:none;">
@@ -638,9 +692,9 @@
                             </div>
                         </div>
                         <form id="flAgentForm" autocomplete="off">
-                            <div class="lz-muted" style="margin-bottom:8px;">Sếp cấp mã ghép máy (hiệu lực 15 phút). Nhập vào đây một lần.</div>
+                            <div class="lz-muted" style="margin-bottom:8px;">Dành cho máy nhân viên: nhập mã sếp cấp (hiệu lực 15 phút), chỉ làm một lần.</div>
                             <label>Địa chỉ máy chủ</label>
-                            <input type="text" id="flHubUrl" class="glass-input" placeholder="https://gemini.vinhglobal.vn">
+                            <input type="text" id="flHubUrl" class="glass-input" placeholder="https://text.vinhglobal.vn" value="https://text.vinhglobal.vn">
                             <label>Mã ghép máy</label>
                             <input type="text" id="flCode" class="glass-input" placeholder="VD: K7M2QX9P" style="text-transform:uppercase;">
                             <details class="fl-adv"><summary>Có Cloudflare Access? (không bắt buộc)</summary>
@@ -651,26 +705,6 @@
                             <div class="lz-error" id="flAgentErr" style="display:none;"></div>
                         </form>
                     </section>
-
-                    <section class="fl-box" id="flHubBox">
-                        <h3><i class="fa-solid fa-server"></i> Máy chủ — cấp mã cho nhân viên</h3>
-                        <form id="flCodeForm" class="fl-inline">
-                            <input type="text" id="flDevName" class="glass-input" placeholder="Tên máy: VD NV-An" maxlength="40">
-                            <button type="submit" class="btn-primary"><i class="fa-solid fa-key"></i> Cấp mã</button>
-                        </form>
-                        <div id="flCodeOut" class="fl-code" style="display:none;"></div>
-                        <div id="flHubDenied" class="lz-muted" style="display:none;">Phần máy chủ chỉ hiện khi mở tool trực tiếp trên máy chủ (localhost:5002).</div>
-                    </section>
-                </div>
-
-                <div id="flHubData">
-                    <h3 style="margin-top:22px;"><i class="fa-solid fa-computer"></i> Máy nhân viên</h3>
-                    <div id="flDevices" class="fl-devices"><div class="lz-muted">Chưa có máy nào ghép.</div></div>
-                    <h3 style="margin-top:22px;"><i class="fa-solid fa-box-archive"></i> Sản phẩm &amp; báo cáo gửi về</h3>
-                    <div class="fl-tablewrap">
-                        <table class="fl-table"><thead><tr><th>Thời gian</th><th>Máy</th><th>Bài</th><th>Quốc gia</th><th>Kết quả</th><th>Ký tự</th><th></th></tr></thead>
-                        <tbody id="flReports"><tr><td colspan="7" class="lz-muted">Chưa có sản phẩm nào.</td></tr></tbody></table>
-                    </div>
                 </div>
             </div>
         </div>

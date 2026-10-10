@@ -655,3 +655,31 @@ select.glass-input option {
 .fl-wide > h2 { margin-bottom: 26px; }
 .tabs-container { flex-wrap: wrap; justify-content: center; }
 .tab-btn { white-space: nowrap; }
+
+/* ===== Đội Máy: bảng điều khiển ===== */
+.fl-dash { grid-column: 1 / -1; width: 100%; }
+.fl-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+.fl-head h2 { margin: 0 0 6px; font-size: 22px; }
+.fl-head .lz-hint { margin: 0; }
+.fl-head-tools { display: flex; gap: 8px; align-items: center; }
+.fl-head-tools .glass-input { width: auto; padding: 8px 12px; }
+.fl-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
+@media (max-width: 900px) { .fl-kpis { grid-template-columns: repeat(2, 1fr); } }
+.fl-kpi { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 16px 18px; }
+.fl-kpi span { display: block; font-size: 11px; letter-spacing: 1.2px; color: var(--text-muted); }
+.fl-kpi b { display: block; font-size: 30px; margin: 6px 0 2px; }
+.fl-kpi small { color: var(--text-muted); font-size: 12px; }
+.fl-statusline { font-size: 13px; color: var(--text-muted); margin: 6px 2px 18px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.fl-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 18px; margin-bottom: 16px; }
+.fl-card h3 { margin: 0 0 12px; font-size: 12px; letter-spacing: 1.4px; color: #93c5fd; }
+.fl-pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; background: rgba(100,116,139,.2); color: #cbd5e1; white-space: nowrap; }
+.fl-pill.on { background: rgba(16,185,129,.15); color: #6ee7b7; }
+.fl-pill.run { background: rgba(59,130,246,.18); color: #93c5fd; }
+.fl-pill.warn { background: rgba(245,158,11,.15); color: #fcd34d; }
+.fl-mini { padding: 3px 9px !important; font-size: 12px !important; }
+.fl-daily { display: grid; gap: 10px; }
+.fl-drow { display: grid; grid-template-columns: 90px 1fr 70px; gap: 12px; align-items: center; font-size: 13px; }
+.fl-drow b { text-align: right; font-weight: 600; }
+.fl-bar { height: 8px; background: rgba(255,255,255,0.07); border-radius: 99px; overflow: hidden; }
+.fl-bar i { display: block; height: 100%; background: linear-gradient(90deg, #10b981, #34d399); border-radius: 99px; }
+.fl-dash .fl-grid { margin-top: 6px; }

@@ -188,6 +188,48 @@ def list_devices():
     return out
 
 
+def summary(days=7):
+    """Số liệu cho bảng điều khiển: tổng quan, năng suất từng máy, sản lượng theo ngày."""
+    import datetime
+    now = time.time()
+    since = now - days * 86400 if days else 0
+    reports = [r for r in list_reports(limit=5000) if r.get("received", 0) >= since]
+    devices = list_devices()
+    per = {}
+    for d in devices:
+        per[d["id"]] = {"id": d["id"], "name": d["name"], "online": d["online"], "revoked": d["revoked"],
+                        "jobs": 0, "units": 0, "errors": 0, "chars": 0, "seconds": 0, "last": 0}
+    total = {"jobs": 0, "units": 0, "errors": 0, "chars": 0, "seconds": 0}
+    daily = {}
+    for r in reports:
+        p = per.setdefault(r["device_id"], {"id": r["device_id"], "name": r.get("device_name", "?"), "online": False,
+                                            "revoked": True, "jobs": 0, "units": 0, "errors": 0, "chars": 0,
+                                            "seconds": 0, "last": 0})
+        for t in (p, total):
+            t["jobs"] += 1
+            t["units"] += r.get("units_done", 0)
+            t["errors"] += r.get("units_error", 0)
+            t["chars"] += r.get("chars", 0)
+            t["seconds"] += r.get("seconds", 0)
+        p["last"] = max(p["last"], r.get("received", 0))
+        day = datetime.datetime.fromtimestamp(r.get("received", 0)).strftime("%d/%m/%Y")
+        daily[day] = daily.get(day, 0) + r.get("units_done", 0)
+    n = days if days else 14
+    day_list = []
+    for i in range(min(n, 14)):
+        day = (datetime.datetime.now() - datetime.timedelta(days=i)).strftime("%d/%m/%Y")
+        day_list.append({"day": day, "units": daily.get(day, 0)})
+    return {
+        "days": days, "total": total,
+        "online": sum(1 for d in devices if d["online"]),
+        "devices_total": sum(1 for d in devices if not d["revoked"]),
+        "waiting_login": sum(1 for d in devices if d["online"] and d["state"].get("gemini_logged_in") is False),
+        "running": sum(1 for d in devices if d["online"] and d["state"].get("job")),
+        "per_device": sorted(per.values(), key=lambda x: -x["units"]),
+        "daily": day_list,
+    }
+
+
 def list_reports(device_id=None, limit=300):
     out = []
     if not os.path.isdir(REPORTS_DIR):
