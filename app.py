@@ -1093,10 +1093,17 @@ def _bearer():
     return h[7:].strip() if h.lower().startswith("bearer ") else ""
 
 
-def _admin_only():
-    """Quản trị chỉ mở cho chính máy chủ (localhost, không qua tunnel)."""
+def _local_only():
+    """Chỉ chính máy này (localhost, không qua tunnel): điều khiển phần 'máy này kết nối máy chủ'."""
     if not fleet.is_local_request(request):
-        return jsonify({"status": "error", "message": "Chỉ thao tác được trên chính máy chủ (localhost)."}), 403
+        return jsonify({"status": "error", "message": "Chỉ thao tác được trên chính máy này (localhost)."}), 403
+    return None
+
+
+def _admin_only():
+    """Quản trị đội máy: chính máy chủ (localhost) hoặc qua web đã đăng nhập Cloudflare Access (kiểm tra chữ ký)."""
+    if fleet.admin_identity(request) is None:
+        return jsonify({"status": "error", "message": "Cần mở trên máy chủ (localhost:5002) hoặc đăng nhập Cloudflare Access."}), 403
     return None
 
 
@@ -1135,7 +1142,7 @@ def fleet_report():
 
 
 # ---- quản trị trên máy chủ
-@app.route("/api/fleet/admin/overview")
+@app.route("/api/fleet-admin/overview")
 def fleet_overview():
     deny = _admin_only()
     if deny:
@@ -1150,7 +1157,7 @@ def fleet_overview():
                     "summary": fleet.summary(days)})
 
 
-@app.route("/api/fleet/admin/pair-code", methods=["POST"])
+@app.route("/api/fleet-admin/pair-code", methods=["POST"])
 def fleet_new_code():
     deny = _admin_only()
     if deny:
@@ -1159,7 +1166,7 @@ def fleet_new_code():
     return jsonify({"status": "success", **fleet.create_pair_code(data.get("name"))})
 
 
-@app.route("/api/fleet/admin/device/<dev_id>", methods=["DELETE"])
+@app.route("/api/fleet-admin/device/<dev_id>", methods=["DELETE"])
 def fleet_device_delete(dev_id):
     deny = _admin_only()
     if deny:
@@ -1169,7 +1176,7 @@ def fleet_device_delete(dev_id):
     return jsonify({"status": "success" if ok else "error"})
 
 
-@app.route("/api/fleet/admin/report/<dev_id>/<job_id>/file")
+@app.route("/api/fleet-admin/report/<dev_id>/<job_id>/file")
 def fleet_report_file(dev_id, job_id):
     deny = _admin_only()
     if deny:
@@ -1194,7 +1201,7 @@ def fleet_agent_status():
 
 @app.route("/api/fleet/agent/pair", methods=["POST"])
 def fleet_agent_pair():
-    deny = _admin_only()
+    deny = _local_only()
     if deny:
         return deny
     d = request.get_json(silent=True) or {}
@@ -1220,7 +1227,7 @@ def fleet_login():
     return jsonify({"status": "success", "device_id": dev_id, "token": token, "name": name})
 
 
-@app.route("/api/fleet/admin/accounts", methods=["GET", "POST"])
+@app.route("/api/fleet-admin/accounts", methods=["GET", "POST"])
 def fleet_accounts():
     deny = _admin_only()
     if deny:
@@ -1235,7 +1242,7 @@ def fleet_accounts():
     return jsonify({"status": "success", "account": acc, "password": pw})
 
 
-@app.route("/api/fleet/admin/accounts/<username>", methods=["PATCH", "DELETE"])
+@app.route("/api/fleet-admin/accounts/<username>", methods=["PATCH", "DELETE"])
 def fleet_account_one(username):
     deny = _admin_only()
     if deny:
@@ -1256,7 +1263,7 @@ def fleet_account_one(username):
 
 @app.route("/api/fleet/agent/login", methods=["POST"])
 def fleet_agent_login():
-    deny = _admin_only()
+    deny = _local_only()
     if deny:
         return deny
     d = request.get_json(silent=True) or {}
@@ -1272,7 +1279,7 @@ def fleet_agent_login():
 
 @app.route("/api/fleet/agent/unpair", methods=["POST"])
 def fleet_agent_unpair():
-    deny = _admin_only()
+    deny = _local_only()
     if deny:
         return deny
     fleet.agent_unpair()
@@ -1281,7 +1288,7 @@ def fleet_agent_unpair():
 
 @app.route("/api/fleet/agent/sync", methods=["POST"])
 def fleet_agent_sync():
-    deny = _admin_only()
+    deny = _local_only()
     if deny:
         return deny
     _AGENT_WAKE.set()

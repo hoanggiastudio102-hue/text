@@ -11,6 +11,7 @@
     const ago = (t) => { if (!t) return 'chưa kết nối'; const s = Math.max(0, Date.now() / 1000 - t);
         return s < 90 ? 'vừa xong' : s < 3600 ? Math.round(s / 60) + ' phút trước' : s < 86400 ? Math.round(s / 3600) + ' giờ trước' : Math.round(s / 86400) + ' ngày trước'; };
     async function jfetch(url, opt) {
+        opt = Object.assign({}, opt); opt.headers = Object.assign({ 'X-Fleet': '1' }, opt.headers || {});
         const r = await fetch(url, opt); let j = {};
         try { j = await r.json(); } catch (e) { }
         return { ok: r.ok, status: r.status, j };
@@ -37,7 +38,7 @@
 
     async function loadHub() {
         const days = $('flRange') ? $('flRange').value : 7;
-        const { ok, j } = await jfetch('/api/fleet/admin/overview?days=' + days);
+        const { ok, j } = await jfetch('/api/fleet-admin/overview?days=' + days);
         const hub = ok && j.status === 'success';
         $('flHubDenied').style.display = hub ? 'none' : '';
         $('flHubBox').querySelectorAll('.fl-acc-head,.fl-acc-tools,.fl-tablewrap,.lz-muted:not(#flHubDenied)').forEach(el => el.style.display = hub ? '' : 'none');
@@ -77,7 +78,7 @@
                 <td>${esc((r.countries || []).join(' '))}</td>
                 <td><span class="fl-badge ${full ? '' : 'partial'}">${r.units_done}/${r.units_total}</span>${r.units_error ? ' <span class="lz-muted">' + r.units_error + ' lỗi</span>' : ''}</td>
                 <td>${num(r.chars)}</td>
-                <td>${r.file ? `<a class="btn-primary fl-mini" style="text-decoration:none" href="/api/fleet/admin/report/${r.device_id}/${r.job_id}/file"><i class="fa-solid fa-download"></i> Tải</a>` : ''}</td></tr>`;
+                <td>${r.file ? `<a class="btn-primary fl-mini" style="text-decoration:none" href="/api/fleet-admin/report/${r.device_id}/${r.job_id}/file"><i class="fa-solid fa-download"></i> Tải</a>` : ''}</td></tr>`;
         }).join('') : '<tr><td colspan="7" class="lz-muted">Chưa có sản phẩm nào trong kỳ này.</td></tr>';
     }
 
@@ -85,7 +86,7 @@
     // ---------- tài khoản nhân viên ----------
     let accounts = [], accFilter = 'all';
     async function loadAccounts() {
-        const { ok, j } = await jfetch('/api/fleet/admin/accounts');
+        const { ok, j } = await jfetch('/api/fleet-admin/accounts');
         if (!ok || j.status !== 'success') return;
         accounts = j.accounts || [];
         renderAccounts();
@@ -131,7 +132,7 @@
         });
         $('flAccForm').addEventListener('submit', async (e) => {
             e.preventDefault(); $('flAccErr').style.display = 'none';
-            const { j } = await jfetch('/api/fleet/admin/accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            const { j } = await jfetch('/api/fleet-admin/accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: $('flAccUser').value, display_name: $('flAccName').value, password: $('flAccPass').value }) });
             if (j.status !== 'success') { $('flAccErr').textContent = j.message || 'Không tạo được tài khoản'; $('flAccErr').style.display = ''; return; }
             showCred('Đã tạo tài khoản', j.account, j.password); loadAccounts();
@@ -148,7 +149,7 @@
         $('flAccounts').addEventListener('click', async (e) => {
             const b = e.target.closest('[data-act]'); if (!b) return;
             const u = b.dataset.u, a = accounts.find(x => x.username === u); if (!a) return;
-            const patch = async (body) => (await jfetch('/api/fleet/admin/accounts/' + encodeURIComponent(u), { method: 'PATCH',
+            const patch = async (body) => (await jfetch('/api/fleet-admin/accounts/' + encodeURIComponent(u), { method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).j;
             if (b.dataset.act === 'pass') {
                 if (!confirm('Tạo mật khẩu mới cho ' + a.display_name + '? Máy đang dùng vẫn chạy, mật khẩu mới dùng cho lần đăng nhập sau.')) return;
@@ -161,7 +162,7 @@
                 const n = prompt('Tên hiển thị mới:', a.display_name); if (n && n.trim()) await patch({ display_name: n.trim() });
             } else if (b.dataset.act === 'del') {
                 if (!confirm('XOÁ tài khoản ' + a.display_name + '? Máy bị thu hồi, báo cáo cũ vẫn giữ. Nếu chỉ tạm nghỉ, nên dùng Khoá.')) return;
-                await jfetch('/api/fleet/admin/accounts/' + encodeURIComponent(u), { method: 'DELETE' }); toast('Đã xoá');
+                await jfetch('/api/fleet-admin/accounts/' + encodeURIComponent(u), { method: 'DELETE' }); toast('Đã xoá');
             }
             refresh();
         });
@@ -202,7 +203,7 @@
             const b = e.target.closest('button[data-act]'); if (!b) return;
             const forget = b.dataset.act === 'forget';
             if (!confirm(forget ? 'Xoá máy này khỏi danh sách? (báo cáo cũ vẫn giữ)' : 'Thu hồi máy này? Máy sẽ không gửi được nữa.')) return;
-            await jfetch('/api/fleet/admin/device/' + b.dataset.id + '?mode=' + (forget ? 'forget' : 'revoke'), { method: 'DELETE' });
+            await jfetch('/api/fleet-admin/device/' + b.dataset.id + '?mode=' + (forget ? 'forget' : 'revoke'), { method: 'DELETE' });
             refresh();
         });
     }

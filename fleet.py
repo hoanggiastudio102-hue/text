@@ -433,6 +433,94 @@ def is_local_request(request):
     return request.remote_addr in ("127.0.0.1", "::1", "::ffff:127.0.0.1")
 
 
+# ---------------------------------------------------------------- QUẢN TRỊ QUA WEB (Cloudflare Access)
+# Đường /api/fleet-admin/* nằm SAU đăng nhập Cloudflare Access của sếp. Cloudflare gắn vào mỗi yêu cầu một thẻ JWT
+# ký bằng khoá của Cloudflare; tool kiểm tra chữ ký + đúng ứng dụng (AUD) + còn hạn rồi mới cho quản trị.
+# Không tin header tự khai: thẻ giả sẽ sai chữ ký.
+ACCESS_TEAM = os.environ.get("ACCESS_TEAM_DOMAIN", "broken-sunset-7301.cloudflareaccess.com")
+ACCESS_AUD = os.environ.get("ACCESS_AUD", "529cdc9f0d84e539eff114c0f975241d5322bf9e0ccc360c2c6622511c12e359")
+ADMIN_EMAILS_FILE = os.path.join(DATA_DIR, "admin_emails.txt")   # (tuỳ chọn) mỗi dòng 1 email được quản trị
+_CERTS = {"at": 0, "keys": {}}
+
+
+def _b64u(s):
+    import base64
+    s = s + "=" * (-len(s) % 4)
+    return base64.urlsafe_b64decode(s.encode("ascii"))
+
+
+def _access_keys(force=False):
+    import requests
+    if not force and _CERTS["keys"] and time.time() - _CERTS["at"] < 3600:
+        return _CERTS["keys"]
+    r = requests.get(f"https://{ACCESS_TEAM}/cdn-cgi/access/certs", timeout=10)
+    r.raise_for_status()
+    keys = {k["kid"]: k for k in r.json().get("keys", []) if k.get("kty") == "RSA"}
+    _CERTS.update(at=time.time(), keys=keys)
+    return keys
+
+
+def verify_access_jwt(token, keys=None):
+    """Trả payload nếu thẻ hợp lệ, ngược lại None."""
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import padding, rsa
+    try:
+        h64, p64, s64 = token.split(".")
+        header = json.loads(_b64u(h64))
+        payload = json.loads(_b64u(p64))
+        if header.get("alg") != "RS256":
+            return None
+        ks = keys if keys is not None else _access_keys()
+        jwk = ks.get(header.get("kid"))
+        if jwk is None and keys is None:
+            jwk = _access_keys(force=True).get(header.get("kid"))
+        if jwk is None:
+            return None
+        pub = rsa.RSAPublicNumbers(int.from_bytes(_b64u(jwk["e"]), "big"),
+                                   int.from_bytes(_b64u(jwk["n"]), "big")).public_key()
+        pub.verify(_b64u(s64), (h64 + "." + p64).encode("ascii"), padding.PKCS1v15(), hashes.SHA256())
+        now = time.time()
+        aud = payload.get("aud")
+        aud = aud if isinstance(aud, list) else [aud]
+        if ACCESS_AUD not in aud:
+            return None
+        if payload.get("iss") != f"https://{ACCESS_TEAM}":
+            return None
+        if float(payload.get("exp", 0)) < now or float(payload.get("nbf", 0)) > now + 60:
+            return None
+        return payload
+    except Exception:
+        return None
+
+
+def _allowed_emails():
+    try:
+        with open(ADMIN_EMAILS_FILE, "r", encoding="utf-8") as f:
+            return {l.strip().lower() for l in f if l.strip() and not l.startswith("#")}
+    except OSError:
+        return set()
+
+
+def admin_identity(request, keys=None):
+    """Trả 'local' nếu gọi trực tiếp trên máy chủ, email nếu qua Cloudflare Access hợp lệ, hoặc None."""
+    if is_local_request(request):
+        return "local"
+    tok = request.headers.get("Cf-Access-Jwt-Assertion") or request.cookies.get("CF_Authorization") or ""
+    if not tok:
+        return None
+    payload = verify_access_jwt(tok, keys)
+    if not payload:
+        return None
+    email = str(payload.get("email") or "").lower()
+    allowed = _allowed_emails()
+    if allowed and email not in allowed:
+        return None
+    # thao tác ghi qua web cần header riêng (chống CSRF: header tuỳ biến buộc trình duyệt kiểm tra CORS trước)
+    if request.method not in ("GET", "HEAD", "OPTIONS") and request.headers.get("X-Fleet") != "1":
+        return None
+    return email or "access"
+
+
 # ================================================================ MÁY NHÂN VIÊN
 def agent_config():
     return _read(AGENT_FILE, {})
