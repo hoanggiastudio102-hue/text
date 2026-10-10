@@ -32,10 +32,10 @@
 
         <!-- Tabs -->
         <div class="tabs-container">
-            <button class="tab-btn active" data-tab="tab-translate"><i class="fa-solid fa-language"></i> Sáng Tạo Ngữ Đơn</button>
-            <button class="tab-btn" data-tab="tab-batch"><i class="fa-solid fa-layer-group"></i> Sáng Tạo Ngữ Hàng Loạt</button>
-            <button class="tab-btn" data-tab="tab-creative"><i class="fa-solid fa-wand-magic-sparkles"></i> Sáng Tạo</button>
-            <button class="tab-btn" data-tab="tab-localize"><i class="fa-solid fa-earth-asia"></i> Tái Sáng Tạo Đa Quốc Gia</button>
+            <button class="tab-btn" data-tab="tab-translate" hidden><i class="fa-solid fa-language"></i> Sáng Tạo Ngữ Đơn</button>
+            <button class="tab-btn" data-tab="tab-batch" hidden><i class="fa-solid fa-layer-group"></i> Sáng Tạo Ngữ Hàng Loạt</button>
+            <button class="tab-btn" data-tab="tab-creative" hidden><i class="fa-solid fa-wand-magic-sparkles"></i> Sáng Tạo</button>
+            <button class="tab-btn active" data-tab="tab-localize"><i class="fa-solid fa-earth-asia"></i> Tái Sáng Tạo Đa Quốc Gia</button>
             <button class="tab-btn" data-tab="tab-fleet"><i class="fa-solid fa-network-wired"></i> Đội Máy</button>
             <button class="tab-btn" data-tab="tab-history"><i class="fa-solid fa-clock-rotate-left"></i> Lịch Sử</button>
             <button class="tab-btn" data-tab="tab-prompts"><i class="fa-solid fa-feather"></i> Prompt</button>
@@ -65,7 +65,7 @@
         </div>
 
         <!-- Main Workspace (Single Translate) -->
-        <div id="tab-translate" class="workspace tab-content active">
+        <div id="tab-translate" class="workspace tab-content" style="display: none;">
             <div class="card input-section">
                 <h2><i class="fa-solid fa-keyboard"></i> Nhập Thông Tin Đầu Vào</h2>
                 
@@ -480,7 +480,7 @@
         </div>
 
         <!-- Localize Workspace: viết lại + bản địa hoá nhiều quốc gia -->
-        <div id="tab-localize" class="workspace tab-content" style="display: none;">
+        <div id="tab-localize" class="workspace tab-content active" style="display: grid;">
             <div class="card input-section">
                 <h2><i class="fa-solid fa-earth-asia"></i> Tái Sáng Tạo Đa Quốc Gia</h2>
                 <p class="lz-hint">Dán hoặc tải bài có sẵn, chọn phong cách sáng tạo và các quốc gia đích. Tool sáng tạo thẳng bằng ngôn ngữ bản địa của từng nước (không dịch từng chữ) trên model Gemini đã chọn, mỗi nước một file.</p>

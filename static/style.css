@@ -720,3 +720,5 @@ select.glass-input option {
 .gm-account { margin-top: 6px; font-size: 12px; color: #6ee7b7; text-align: right; max-width: 280px; word-break: break-all; }
 .gm-account a { color: #93c5fd; }
 .gm-account .gm-warn { color: #fcd34d; }
+
+.tab-btn[hidden]{display:none !important}
