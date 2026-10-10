@@ -493,6 +493,33 @@
                         <div id="lzFileList" class="file-list"></div>
                     </div>
 
+                    <div class="form-group lz-outline-box">
+                        <label><span><i class="fa-solid fa-list-ol"></i> Dàn ý bổ sung (tuỳ chọn) — Gemini viết bài mới theo dàn ý, lấy bài gốc làm tham khảo</span></label>
+                        <div id="lzOutlineDrop" class="drop-zone drop-zone-sm">
+                            <p><i class="fa-solid fa-cloud-arrow-up"></i> Kéo thả file dàn ý .txt vào đây hoặc <span>Click để chọn</span> (đặt tên cùng bài gốc, VD: <code>nhahang.txt</code> + <code>nhahang_danY.txt</code>)</p>
+                            <input type="file" id="lzOutlineInput" accept=".txt" multiple style="display: none;">
+                        </div>
+                        <div id="lzOutlineList" class="file-list"></div>
+                        <div id="lzPairBox" class="lz-pairs" style="display: none;"></div>
+                        <textarea id="lzOutlineText" class="glass-input" rows="3" placeholder="Hoặc dán một dàn ý CHUNG cho các bài chưa có dàn ý riêng (mỗi dòng một mục, VD: 1. Mở đầu ...)"></textarea>
+                        <div class="lz-two-col">
+                            <div>
+                                <label for="lzOutlineUse"><span>Bám dàn ý</span></label>
+                                <select id="lzOutlineUse" class="glass-input">
+                                    <option value="strict">Bám sát từng mục theo thứ tự</option>
+                                    <option value="loose">Dàn ý là khung, được điều chỉnh khi bài gốc có ý hay hơn</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="lzSourceUse"><span>Dùng bài gốc để</span></label>
+                                <select id="lzSourceUse" class="glass-input">
+                                    <option value="fresh">Chỉ lấy ý, dữ kiện — viết mới hoàn toàn bằng lời riêng</option>
+                                    <option value="close">Giữ sát nội dung bài gốc, chỉ sắp lại theo dàn ý</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="form-group">
                         <label for="lzYt"><span><i class="fa-brands fa-youtube icon-youtube" style="color: #ef4444;"></i> Link YouTube (lấy phụ đề làm bài gốc, mỗi link 1 dòng)</span></label>
                         <textarea id="lzYt" class="glass-input" rows="2" placeholder="https://www.youtube.com/watch?v=..."></textarea>

@@ -146,7 +146,8 @@ def fill_template_vars(template, country, audience=""):
 
 
 def build_prompt(chunk, country, style_text, mode="rewrite", audience="", length="same",
-                 keywords="", glossary="", extra="", part=1, parts=1):
+                 keywords="", glossary="", extra="", part=1, parts=1,
+                 outline="", outline_use="strict", source_use="fresh"):
     """
     Dựng prompt gửi Gemini cho 1 đoạn của bài, cho 1 quốc gia.
 
@@ -157,6 +158,7 @@ def build_prompt(chunk, country, style_text, mode="rewrite", audience="", length
     style_text = fill_template_vars(style_text, country, audience).strip()
 
     analyze = (mode == "analyze")
+    outline = (outline or "").strip() if mode != "localize" else ""
     if analyze:
         lang_txt = "the same language as the input" if is_same else country["language"]
         task = (f"Using the INPUT below as the subject (it may be a full article, notes, or just a short topic / name / "
@@ -193,6 +195,25 @@ def build_prompt(chunk, country, style_text, mode="rewrite", audience="", length
     if style_text:
         sections.append(f"STYLE GUIDE:\n{style_text}")
 
+    if outline:
+        if outline_use == "loose":
+            ol_rule = ("Use the outline as the backbone of the new article. You may merge, reorder or add a section "
+                       "only when the reference article contains important material that the outline misses; "
+                       "never drop an outline topic.")
+        else:
+            ol_rule = ("Follow the outline strictly: cover EVERY item in the same order, using its headings (translated "
+                       "naturally into the target language), and do not add major sections that are not in it. "
+                       "Expand each item fully.")
+        if source_use == "close":
+            src_rule = ("Stay close to the reference article's content and ideas wherever the outline allows; "
+                        "re-express the wording freshly.")
+        else:
+            src_rule = ("Treat the reference article as research material only: take its facts, data, names and key "
+                        "ideas, but write every sentence fresh in new wording and a new structure. Do not copy "
+                        "phrases longer than four words and do not mirror its paragraph order.")
+        sections.append("OUTLINE (the structure of the new article):\n<<<\n" + outline + "\n>>>\n" + ol_rule +
+                        "\n\nREFERENCE USE: " + src_rule +
+                        "\nFacts may come from the reference article or from the outline; do not add facts from elsewhere.")
     if analyze:
         sections.append(
             "ACCURACY RULES FOR ANALYSIS (strict):\n"
@@ -211,10 +232,10 @@ def build_prompt(chunk, country, style_text, mode="rewrite", audience="", length
                         "them as generic examples; keep exact figures, quotes and official names intact.\n"
                         "- Keep names of real people, brands and products recognisable (add the standard local "
                         "transliteration for non-Latin scripts when it is customary).\n"
-                        "- Never add new facts, claims, statistics or sources that are not in the source.")
+                        "- Never add new facts, claims, statistics or sources that are not in " + ("the reference article or the outline." if outline else "the source."))
     else:
         sections.append(f"LANGUAGE RULES:\n- {country['notes']}\n"
-                        "- Never add new facts, claims, statistics or sources that are not in the source.")
+                        "- Never add new facts, claims, statistics or sources that are not in " + ("the reference article or the outline." if outline else "the source."))
 
     aud = (audience or "").strip()
     if aud:
@@ -225,6 +246,9 @@ def build_prompt(chunk, country, style_text, mode="rewrite", audience="", length
                                        "shorter": "Compact version: about 600-900 words."}.get(
             length, "Follow the style guide. If the input is short, produce a complete in-depth report of about "
                     "1,500-2,500 words; if the input is long, analyse it fully without padding."))
+    elif outline and length == "same":
+        sections.append("LENGTH: Let the outline decide: cover every item fully; the total should be roughly comparable "
+                        "to the reference article unless the outline clearly calls for more or less.")
     else:
         sections.append(f"LENGTH: {LENGTH_RULES.get(length, LENGTH_RULES['same'])}")
 
@@ -263,15 +287,18 @@ def build_prompt(chunk, country, style_text, mode="rewrite", audience="", length
         "- Output ONLY the finished text. No preamble, no title like 'Here is…', no notes, no explanation, "
         "no word counts, no mention of the style guide, no closing remarks.\n"
         "- Do not wrap the text in code fences or quotation marks.\n"
-        "- Keep the source structure (headings, paragraphs, lists) unless the style guide requires otherwise; "
-        "write headings as plain lines.\n"
+        + ("- Use the structure of the OUTLINE (not the reference article's structure); write headings as plain lines.\n"
+           if outline else
+           "- Keep the source structure (headings, paragraphs, lists) unless the style guide requires otherwise; "
+           "write headings as plain lines.\n") +
         "- The result must be complete: do not stop early, skip paragraphs or summarise unless asked.")
 
-    sections.append("SOURCE ARTICLE:\n<<<\n" + chunk.strip() + "\n>>>")
+    label = "REFERENCE ARTICLE (source of facts and ideas):" if outline else "SOURCE ARTICLE:"
+    sections.append(label + "\n<<<\n" + chunk.strip() + "\n>>>")
     return "\n\n".join(sections)
 
 
-def build_review_prompt(country, mode="rewrite", part=1, parts=1):
+def build_review_prompt(country, mode="rewrite", part=1, parts=1, has_outline=False):
     """Bước 2 (tuỳ chọn): bắt Gemini tự soát lại đúng bản vừa viết trong cùng cuộc chat."""
     is_same = country["code"] == "SAME"
     if mode == "analyze":
@@ -291,7 +318,9 @@ def build_review_prompt(country, mode="rewrite", part=1, parts=1):
         f"3) unnatural, stiff or translated-sounding phrasing, {lang_check}, wrong local conventions "
         "(address form, currency, units, dates);\n"
         "4) leftover words of the source language that should have been translated;\n"
-        "5) formatting or structure that drifted from the source.\n"
+        + ("5) every item of the OUTLINE is covered, in order, with no major off-outline sections, and no sentence "
+           "copied from the reference article.\n" if has_outline else
+           "5) formatting or structure that drifted from the source.\n") +
         "Fix every problem you find and output the COMPLETE corrected final text for this part. "
         "Output ONLY the final text: no review notes, no list of changes, no preamble."
     )

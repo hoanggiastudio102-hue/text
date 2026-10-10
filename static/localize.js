@@ -230,7 +230,105 @@
             d.querySelector('.remove-file').addEventListener('click', () => { files.splice(i, 1); renderFiles(); });
             box.appendChild(d);
         });
+        if (typeof renderPairs === 'function') renderPairs();
     }
+
+    // ---------- dàn ý & ghép cặp ----------
+    const outlineFiles = [];
+    const pairChoice = {};   // key nguồn -> tên file dàn ý | '__none__' (chọn tay)
+    const OUTLINE_SUFFIX = /[\s._-]*(dan[\s._-]*y|outline|dan[\s._-]*bai|khung)$/i;
+    function baseKey(name) {
+        let b = name.replace(/\.[^.]+$/, '');
+        b = b.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase();
+        return b.replace(OUTLINE_SUFFIX, '').replace(/[^a-z0-9]+/g, '');
+    }
+    function sourceKeys() {
+        const keys = [];
+        if ($('lzRawText').value.trim() && !$('lzPerLine').checked) keys.push({ key: '__paste__', label: 'Bài dán ở ô trên' });
+        files.forEach((f) => keys.push({ key: f.name, label: f.name }));
+        return keys;
+    }
+    function autoPairs(srcs) {
+        const res = {};
+        const used = new Set();
+        srcs.forEach((s) => {
+            const m = outlineFiles.find((o) => !used.has(o.name) && s.key !== '__paste__' && baseKey(o.name) === baseKey(s.key));
+            if (m) { res[s.key] = { name: m.name, how: 'trùng tên' }; used.add(m.name); }
+        });
+        const freeSrc = srcs.filter((s) => !res[s.key]);
+        const freeOl = outlineFiles.filter((o) => !used.has(o.name));
+        if (freeOl.length === freeSrc.length || (freeOl.length === 1 && srcs.length === 1)) {
+            freeSrc.forEach((s, i) => { if (freeOl[i]) res[s.key] = { name: freeOl[i].name, how: 'theo thứ tự' }; });
+        }
+        return res;
+    }
+    function currentPairs() {
+        const srcs = sourceKeys();
+        const auto = autoPairs(srcs);
+        const out = {};
+        srcs.forEach((s) => {
+            const c = pairChoice[s.key];
+            if (c === '__none__') out[s.key] = '__none__';
+            else if (c && outlineFiles.some((o) => o.name === c)) out[s.key] = c;
+            else if (auto[s.key]) out[s.key] = auto[s.key].name;
+        });
+        return { srcs, auto, out };
+    }
+    function renderOutlines() {
+        const box = $('lzOutlineList');
+        box.innerHTML = '';
+        outlineFiles.forEach((f, i) => {
+            const d = document.createElement('div');
+            d.className = 'file-item';
+            d.innerHTML = `<span><i class="fa-solid fa-list-ol"></i> ${esc(f.name)} <small>(${Math.round(f.size / 1024 * 10) / 10} KB)</small></span><i class="fa-solid fa-xmark remove-file" style="cursor:pointer" title="Bỏ file"></i>`;
+            d.querySelector('.remove-file').addEventListener('click', () => { outlineFiles.splice(i, 1); renderOutlines(); });
+            box.appendChild(d);
+        });
+        renderPairs();
+    }
+    function renderPairs() {
+        const pb = $('lzPairBox');
+        const { srcs, auto, out } = currentPairs();
+        if (!outlineFiles.length || !srcs.length) { pb.style.display = 'none'; pb.innerHTML = ''; return; }
+        pb.style.display = 'block';
+        const general = $('lzOutlineText').value.trim();
+        let html = '<div class="lz-pair-head"><b>Bảng ghép cặp</b> — kiểm tra trước khi chạy</div>';
+        srcs.forEach((s) => {
+            const cur = out[s.key] || '';
+            const how = pairChoice[s.key] ? 'chọn tay' : (auto[s.key] ? auto[s.key].how : '');
+            const opts = ['<option value="">' + (general ? '(dùng dàn ý chung)' : '(không có dàn ý — chạy như bình thường)') + '</option>',
+                '<option value="__none__"' + (cur === '__none__' ? ' selected' : '') + '>(không dùng dàn ý cho bài này)</option>']
+                .concat(outlineFiles.map((o) => `<option value="${esc(o.name)}"${cur === o.name ? ' selected' : ''}>${esc(o.name)}</option>`));
+            const warn = !cur ? ' lz-pair-warn' : '';
+            html += `<div class="lz-pair-row${warn}"><span class="lz-pair-src"><i class="fa-solid fa-file-lines"></i> ${esc(s.label)}</span>` +
+                `<span class="lz-pair-arrow">↔</span><select class="glass-input lz-pair-sel" data-key="${esc(s.key)}">${opts.join('')}</select>` +
+                `<small class="lz-muted">${how}</small></div>`;
+        });
+        const usedNames = new Set(Object.values(out));
+        const lonely = outlineFiles.filter((o) => !usedNames.has(o.name));
+        if (lonely.length) html += `<div class="lz-pair-note">Dàn ý chưa được dùng: ${lonely.map((o) => esc(o.name)).join(', ')}</div>`;
+        pb.innerHTML = html;
+        pb.querySelectorAll('.lz-pair-sel').forEach((sel) => sel.addEventListener('change', () => {
+            if (sel.value) pairChoice[sel.dataset.key] = sel.value; else delete pairChoice[sel.dataset.key];
+            renderPairs();
+        }));
+    }
+    function addOutlines(list) {
+        Array.from(list).forEach((f) => {
+            if (!/\.txt$/i.test(f.name)) return toast(`Bỏ qua ${f.name} (chỉ nhận .txt)`, true);
+            if (!outlineFiles.some((x) => x.name === f.name && x.size === f.size)) outlineFiles.push(f);
+        });
+        renderOutlines();
+    }
+    const odz = $('lzOutlineDrop');
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach((ev) => odz.addEventListener(ev, (e) => { e.preventDefault(); e.stopPropagation(); }));
+    ['dragenter', 'dragover'].forEach((ev) => odz.addEventListener(ev, () => odz.classList.add('dragover')));
+    ['dragleave', 'drop'].forEach((ev) => odz.addEventListener(ev, () => odz.classList.remove('dragover')));
+    odz.addEventListener('drop', (e) => addOutlines(e.dataTransfer.files));
+    odz.addEventListener('click', () => $('lzOutlineInput').click());
+    $('lzOutlineInput').addEventListener('change', (e) => { addOutlines(e.target.files); e.target.value = ''; });
+    ['input', 'change'].forEach((ev) => { $('lzRawText').addEventListener(ev, renderPairs); $('lzOutlineText').addEventListener(ev, renderPairs); });
+    $('lzPerLine').addEventListener('change', renderPairs);
 
     // ---------- gửi form ----------
     function buildFormData() {
@@ -238,6 +336,11 @@
         fd.append('rawText', $('lzRawText').value);
         fd.append('ytUrl', $('lzYt').value);
         files.forEach((f) => fd.append('files[]', f));
+        outlineFiles.forEach((f) => fd.append('outlines[]', f));
+        fd.append('pairs', JSON.stringify(currentPairs().out));
+        fd.append('outlineText', $('lzOutlineText').value);
+        fd.append('outlineUse', $('lzOutlineUse').value);
+        fd.append('sourceUse', $('lzSourceUse').value);
         fd.append('countries', JSON.stringify(Array.from(selected)));
         fd.append('promptId', $('lzStyle').value);
         fd.append('audience', $('lzAudience').value);

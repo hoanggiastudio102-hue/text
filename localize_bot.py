@@ -104,13 +104,21 @@ class Job:
 # ---------------------------------------------------------------------------
 def process_unit(job, session, article, code, chunks):
     cfg = job.data
+    outline = ""
+    if article.get("outline_file"):
+        try:
+            with open(os.path.join(job.dir, "sources", article["outline_file"]), "r", encoding="utf-8") as f:
+                outline = f.read().strip()
+        except OSError:
+            outline = ""
     country = locales.get_country(code)
     res = cfg["results"][rkey(article["id"], code)]
     res.update(status="running", started_at=time.time(), chunks_total=len(chunks), chunks_done=0, error="")
     cfg["current"] = {"article": article["id"], "code": code}
     job.save()
     job.log(f"▶ [{article['name']}] {country['flag']} {country['name_vi']} "
-            f"({country['language']}) — {len(chunks)} phần")
+            f"({country['language']}) — {len(chunks)} phần"
+            + (f" — theo dàn ý: {article.get('outline_name') or 'có'}" if outline else ""))
 
     outputs = []
     for i, chunk in enumerate(chunks, start=1):
@@ -118,7 +126,8 @@ def process_unit(job, session, article, code, chunks):
             chunk, country, cfg.get("style_text", ""), mode=cfg.get("mode", "rewrite"),
             audience=cfg.get("audience", ""), length=cfg.get("length", "same"),
             keywords=cfg.get("keywords", ""), glossary=cfg.get("glossary", ""),
-            extra=cfg.get("extra", ""), part=i, parts=len(chunks))
+            extra=cfg.get("extra", ""), part=i, parts=len(chunks),
+            outline=outline, outline_use=cfg.get("outline_use", "strict"), source_use=cfg.get("source_use", "fresh"))
 
         last_err = None
         text = ""
@@ -145,7 +154,7 @@ def process_unit(job, session, article, code, chunks):
             job.log(f"   phần {i}/{len(chunks)}: tự soát lại lần 2…")
             try:
                 fixed = session.ask(locales.build_review_prompt(
-                    country, mode=cfg.get("mode", "rewrite"), part=i, parts=len(chunks)))
+                    country, mode=cfg.get("mode", "rewrite"), part=i, parts=len(chunks), has_outline=bool(outline)))
                 if fixed.strip() and len(fixed) >= 0.4 * len(text):
                     text = fixed
                 else:
@@ -279,7 +288,7 @@ def run_job(job_dir, session_factory=None):
                 try:
                     if article["id"] not in chunk_cache:
                         with open(os.path.join(job.dir, "sources", article["file"]), "r", encoding="utf-8") as f:
-                            chunk_cache[article["id"]] = locales.split_text(f.read(), max(int(cfg.get("chunk_size") or 12000), 60000) if cfg.get("mode") == "analyze" else int(cfg.get("chunk_size") or 12000))
+                            chunk_cache[article["id"]] = locales.split_text(f.read(), max(int(cfg.get("chunk_size") or 12000), 60000) if (cfg.get("mode") == "analyze" or article.get("outline_file")) else int(cfg.get("chunk_size") or 12000))
                     chunks = chunk_cache[article["id"]]
                     if not chunks:
                         raise GeminiError("Bài gốc trống.")

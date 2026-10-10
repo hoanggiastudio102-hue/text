@@ -708,26 +708,53 @@ def _safe_name(name, fallback="bai_viet"):
 
 
 def _collect_articles(form, files):
-    """Gom đầu vào thành danh sách bài riêng: mỗi file .txt, mỗi link YouTube, và phần văn bản dán."""
+    """Gom đầu vào thành danh sách bài riêng: mỗi file .txt, mỗi link YouTube, và phần văn bản dán.
+    Mỗi bài có thể kèm "outline" (dàn ý): ghép cặp theo bảng `pairs` từ giao diện, nếu không có thì dùng dàn ý chung."""
     articles = []
     raw_text = (form.get("rawText") or "").strip()
+    outline_files = {}
+    for f in files.getlist("outlines[]"):
+        if f and f.filename:
+            t = _read_text_upload(f).strip()
+            if t:
+                outline_files[f.filename] = t
+    try:
+        pairs = json.loads(form.get("pairs") or "{}")
+        if not isinstance(pairs, dict):
+            pairs = {}
+    except ValueError:
+        pairs = {}
+    general = (form.get("outlineText") or "").strip()
+
+    def outline_for(key):
+        name = pairs.get(key)
+        if name and name in outline_files:
+            return outline_files[name], name
+        if name == "__none__":
+            return "", ""
+        return (general, "dàn ý chung") if general else ("", "")
+
     per_line = form.get("perLine") in ("1", "true", "on")
     if raw_text and per_line:
         # chế độ hàng loạt chủ đề: mỗi dòng là một chủ đề/bài riêng
         for line in raw_text.splitlines():
             line = line.strip()
             if line:
-                articles.append({"name": _safe_name(line, "chu_de"), "text": line})
+                o, on = (general, "dàn ý chung") if general else ("", "")
+                articles.append({"name": _safe_name(line, "chu_de"), "text": line, "outline": o, "outline_name": on})
     elif raw_text:
         custom = (form.get("customFilename") or "").strip()
         one_line = "\n" not in raw_text and len(raw_text) <= 100
         fallback = _safe_name(raw_text, "bai_dan") if one_line else "bai_dan"
-        articles.append({"name": _safe_name(custom, fallback) if custom else fallback, "text": raw_text})
+        o, on = outline_for("__paste__")
+        articles.append({"name": _safe_name(custom, fallback) if custom else fallback, "text": raw_text,
+                         "outline": o, "outline_name": on})
     for f in files.getlist("files[]"):
         if f and f.filename:
             text = _read_text_upload(f).strip()
             if text:
-                articles.append({"name": _safe_name(f.filename), "text": text})
+                o, on = outline_for(f.filename)
+                articles.append({"name": _safe_name(f.filename), "text": text, "outline": o, "outline_name": on})
     for link in (form.get("ytUrl") or "").splitlines():
         link = link.strip()
         if not link:
@@ -735,7 +762,9 @@ def _collect_articles(form, files):
         transcript = extract_youtube_transcript(link)
         if transcript and not transcript.startswith("[LỖI"):
             m = _re.search(r"(?:v=|youtu\.be/)([0-9A-Za-z_-]{11})", link)
-            articles.append({"name": f"youtube_{m.group(1) if m else len(articles) + 1}", "text": transcript})
+            o, on = outline_for(link)
+            articles.append({"name": f"youtube_{m.group(1) if m else len(articles) + 1}", "text": transcript,
+                             "outline": o, "outline_name": on})
     # tên không trùng nhau
     seen = {}
     for a in articles:
@@ -886,14 +915,17 @@ def api_localize_preview():
         chunk_size = int(request.form.get("chunkSize") or 12000)
     except ValueError:
         chunk_size = 12000
-    if mode == "analyze":
+    outline = articles[0].get("outline", "")
+    if mode == "analyze" or outline:
         chunk_size = max(chunk_size, 60000)
     chunks = locales.split_text(articles[0]["text"], chunk_size)
     prompt = locales.build_prompt(
         chunks[0], locales.get_country(countries[0]), style_text, mode=mode,
         audience=request.form.get("audience", ""), length=request.form.get("length", "same"),
         keywords=request.form.get("keywords", ""), glossary=request.form.get("glossary", ""),
-        extra=request.form.get("extra", ""), part=1, parts=len(chunks))
+        extra=request.form.get("extra", ""), part=1, parts=len(chunks),
+        outline=outline, outline_use="loose" if request.form.get("outlineUse") == "loose" else "strict",
+        source_use="close" if request.form.get("sourceUse") == "close" else "fresh")
     return jsonify({"status": "success", "prompt": prompt, "chunks": len(chunks),
                     "article": articles[0]["name"], "country": countries[0]})
 
@@ -924,7 +956,13 @@ def api_localize_start():
         fname = f"{a['id']}.txt"
         with open(os.path.join(job_dir, "sources", fname), "w", encoding="utf-8") as f:
             f.write(a["text"])
-        meta_articles.append({"id": a["id"], "name": a["name"], "file": fname, "chars": len(a["text"])})
+        meta = {"id": a["id"], "name": a["name"], "file": fname, "chars": len(a["text"])}
+        if a.get("outline"):
+            ofile = f"{a['id']}.outline.txt"
+            with open(os.path.join(job_dir, "sources", ofile), "w", encoding="utf-8") as f:
+                f.write(a["outline"])
+            meta.update(outline_file=ofile, outline_name=a.get("outline_name", ""), outline_chars=len(a["outline"]))
+        meta_articles.append(meta)
 
     try:
         chunk_size = max(2000, min(40000, int(form.get("chunkSize") or 12000)))
@@ -937,6 +975,8 @@ def api_localize_start():
                      else (_safe_name(form.get("customFilename"), "BaiViet")),
         "articles": meta_articles, "countries": countries, "results": {},
         "style_id": form.get("promptId", ""), "style_text": style_text, "mode": mode,
+        "outline_use": "loose" if form.get("outlineUse") == "loose" else "strict",
+        "source_use": "close" if form.get("sourceUse") == "close" else "fresh",
         "audience": form.get("audience", "").strip(), "length": length if length in locales.LENGTH_RULES else "same",
         "keywords": form.get("keywords", ""), "glossary": form.get("glossary", ""),
         "extra": form.get("extra", "").strip(), "review": form.get("review") in ("1", "true", "on"),
