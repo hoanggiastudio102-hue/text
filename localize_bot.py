@@ -150,6 +150,27 @@ def process_unit(job, session, article, code, chunks):
         if last_err is not None:
             raise last_err
 
+        # --- chốt độ dài: bản ra quá ngắn so với bài gốc thì bắt Gemini viết đầy đủ lại (tối đa 2 lần) ---
+        if cfg.get("mode") != "analyze" and cfg.get("length", "same") != "shorter" and len(chunk) > 1500:
+            factor = 1.4 if cfg.get("length") == "longer" else 1.0
+            want, unit = locales.target_units(chunk, code, factor)
+            for rnd in (1, 2):
+                have = locales.measure(text, code)
+                if have >= 0.8 * want:
+                    break
+                job.log(f"   ⚠️ bản ra ngắn ({have:,}/{want:,} {unit}) — yêu cầu Gemini viết đầy đủ lại ({rnd}/2)…")
+                try:
+                    longer = session.ask(locales.build_expand_prompt(country, have, want, unit))
+                except (GeminiLimitError, GeminiCancelled):
+                    raise
+                except GeminiError as e:
+                    job.log(f"   (bỏ qua bước nới độ dài: {e})")
+                    break
+                if locales.measure(longer, code) > have * 1.1:
+                    text = longer
+                else:
+                    break
+
         if cfg.get("review"):
             job.log(f"   phần {i}/{len(chunks)}: tự soát lại lần 2…")
             try:

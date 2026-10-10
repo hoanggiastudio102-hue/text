@@ -138,14 +138,32 @@ def _volume(text):
     return int(hangul * 0.4 + han * 0.6 + other)
 
 
-def target_size(src, code, factor=1.0):
-    """Mục tiêu độ dài cụ thể (chữ/ký tự) cho ngôn ngữ đích, tính từ bài nguồn."""
+def target_units(src, code, factor=1.0):
+    """(số lượng, đơn vị) mục tiêu cho ngôn ngữ đích: ký tự với CJK, từ với ngôn ngữ còn lại."""
     words = max(1, int(_volume(src) * factor))
     if code in CJK_TARGETS:
-        per = 2.2 if code == "KR" else 1.8
-        n = int(words * per)
-        return f"about {n:,} characters (at least {int(n * 0.9):,})"
-    return f"about {words:,} words (at least {int(words * 0.9):,})"
+        return int(words * (2.2 if code == "KR" else 1.8)), "characters"
+    return words, "words"
+
+
+def measure(text, code):
+    """Đo độ dài bản ra theo cùng đơn vị với target_units."""
+    if code in CJK_TARGETS:
+        return len(re.sub(r"\s+", "", text))
+    return len(re.findall(r"\w+", text))
+
+
+def target_size(src, code, factor=1.0):
+    n, unit = target_units(src, code, factor)
+    return f"about {n:,} {unit} (at least {int(n * 0.9):,})"
+
+
+def build_expand_prompt(country, have, want, unit):
+    return (f"Your previous answer has only about {have:,} {unit}, but the full text must be about {want:,} {unit}. "
+            f"It is too short: sections of the source were compressed or left out. Write the COMPLETE text again in "
+            f"{country['language']}, from the first line to the last, this time covering EVERY paragraph, example, number and "
+            f"argument of the source at full depth (and every item of the outline, if one was given). "
+            "Do not summarise, do not skip, do not add commentary. Output ONLY the full finished text.")
 
 
 def _lines(value):
