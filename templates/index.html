@@ -36,6 +36,7 @@
             <button class="tab-btn" data-tab="tab-batch" hidden><i class="fa-solid fa-layer-group"></i> Sáng Tạo Ngữ Hàng Loạt</button>
             <button class="tab-btn" data-tab="tab-creative" hidden><i class="fa-solid fa-wand-magic-sparkles"></i> Sáng Tạo</button>
             <button class="tab-btn active" data-tab="tab-localize"><i class="fa-solid fa-earth-asia"></i> Tái Sáng Tạo Đa Quốc Gia</button>
+            <button class="tab-btn" data-tab="tab-notebook"><i class="fa-solid fa-book-open"></i> NotebookLM</button>
             <button class="tab-btn" data-tab="tab-fleet"><i class="fa-solid fa-network-wired"></i> Đội Máy</button>
             <button class="tab-btn" data-tab="tab-history"><i class="fa-solid fa-clock-rotate-left"></i> Lịch Sử</button>
             <button class="tab-btn" data-tab="tab-prompts"><i class="fa-solid fa-feather"></i> Prompt</button>
@@ -656,6 +657,110 @@
             </div>
         </div>
 
+        <!-- Module NotebookLM: Thư mục -> Dạng bài -> dán bài, chạy nhiều nước -->
+        <div id="tab-notebook" class="workspace tab-content" style="display: none;">
+            <div class="card input-section">
+                <h2><i class="fa-solid fa-book-open"></i> NotebookLM — Thư mục &amp; Dạng bài</h2>
+                <p class="lz-hint">Tạo thư mục, trong đó là các dạng bài (mỗi dạng có prompt riêng và các nguồn cố định như quy tắc, bài mẫu). Dán bài vào một dạng bài, chọn nước, Tool tạo sổ NotebookLM mới cho từng bài × nước và lấy bản viết về. Tool <b>không xoá</b> gì trong NotebookLM.</p>
+
+                <div class="lz-actions-row">
+                    <button type="button" id="nbFolderNew" class="btn-primary"><i class="fa-solid fa-folder-plus"></i> Thư mục mới</button>
+                    <button type="button" id="nbFolderRename" class="btn-primary"><i class="fa-solid fa-pen"></i> Đổi tên</button>
+                    <button type="button" id="nbFolderDel" class="btn-primary"><i class="fa-solid fa-trash"></i> Xoá thư mục</button>
+                </div>
+                <div class="form-group">
+                    <label for="nbFolder"><span><i class="fa-solid fa-folder-open"></i> Thư mục</span></label>
+                    <select id="nbFolder" class="glass-input"></select>
+                </div>
+                <div class="lz-actions-row">
+                    <button type="button" id="nbTypeNew" class="btn-primary"><i class="fa-solid fa-plus"></i> Dạng bài mới</button>
+                    <button type="button" id="nbTypeEdit" class="btn-primary"><i class="fa-solid fa-pen"></i> Sửa dạng bài</button>
+                    <button type="button" id="nbTypeDel" class="btn-primary"><i class="fa-solid fa-trash"></i> Xoá dạng bài</button>
+                </div>
+                <div class="form-group">
+                    <label for="nbType"><span><i class="fa-solid fa-file-pen"></i> Dạng bài</span><span id="nbTypeInfo" class="char-count"></span></label>
+                    <select id="nbType" class="glass-input"></select>
+                </div>
+
+                <form id="nbForm">
+                    <div class="form-group">
+                        <label for="nbRaw"><span><i class="fa-solid fa-align-left icon-text"></i> Dán bài gốc</span><span id="nbCount" class="char-count">0 ký tự</span></label>
+                        <textarea id="nbRaw" class="glass-input" rows="8" placeholder="Dán bài (hoặc nhiều bài: chọn file .txt bên dưới, mỗi file là một bài)"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="nbFiles"><span><i class="fa-solid fa-file-lines"></i> Hoặc chọn file .txt (nhiều file = nhiều bài)</span></label>
+                        <input type="file" id="nbFiles" accept=".txt" multiple class="glass-input">
+                    </div>
+                    <div class="form-group">
+                        <label><span><i class="fa-solid fa-earth-asia"></i> Quốc gia đích</span><span id="nbCountryCount" class="char-count">Đã chọn 0</span></label>
+                        <div class="lz-actions-row">
+                            <input type="text" id="nbCountrySearch" class="glass-input" placeholder="Tìm nước...">
+                            <button type="button" class="btn-primary" id="nbSelAll">Chọn hết</button>
+                            <button type="button" class="btn-primary" id="nbSelNone">Bỏ chọn</button>
+                        </div>
+                        <div id="nbCountries" class="country-grid"><div class="lz-muted">Đang tải danh sách...</div></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="nbName"><span><i class="fa-solid fa-tag"></i> Tên file xuất (tuỳ chọn)</span></label>
+                        <input type="text" id="nbName" class="glass-input" placeholder="VD: BaiSanPham">
+                        <label class="lz-check"><input type="checkbox" id="nbPerLine"> <span>Mỗi dòng là một bài/chủ đề riêng</span></label>
+                        <label class="lz-check"><input type="checkbox" id="nbDry"> <span>Chạy thử — không mở NotebookLM, chỉ kiểm tra luồng và file xuất</span></label>
+                    </div>
+                    <div class="action-bar lz-actions">
+                        <button type="submit" id="nbStart" class="btn-glow"><i class="fa-solid fa-bolt"></i> Chạy NotebookLM</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="card output-section">
+                <h2><i class="fa-solid fa-list-check"></i> Tiến Độ &amp; Kết Quả</h2>
+                <div id="nbEmpty" class="empty-state">
+                    <i class="fa-solid fa-book-open"></i>
+                    <p>Chưa có job. Chọn dạng bài, dán bài, chọn nước rồi bấm Chạy.</p>
+                </div>
+                <div id="nbJob" style="display: none;">
+                    <div class="lz-jobhead"><span id="nbState" class="lz-badge">—</span><span id="nbSummary" class="lz-muted"></span></div>
+                    <div class="lz-progress"><div id="nbBar" class="lz-progress-bar"></div></div>
+                    <div id="nbError" class="lz-error" style="display: none;"></div>
+                    <div id="nbGroups"></div>
+                    <div class="lz-actions-row">
+                        <button type="button" id="nbCancel" class="btn-primary" style="display: none;"><i class="fa-solid fa-ban"></i> Huỷ</button>
+                        <button type="button" id="nbResume" class="btn-primary" style="display: none;"><i class="fa-solid fa-play"></i> Tiếp tục phần còn thiếu</button>
+                        <a id="nbZip" href="#" class="btn-primary" style="display: none;" download><i class="fa-solid fa-file-zipper"></i> Tải tất cả (ZIP)</a>
+                    </div>
+                    <div id="nbPreviewBox" style="display: none;">
+                        <label><span id="nbPreviewTitle">Xem trước</span></label>
+                        <textarea id="nbPreviewText" class="glass-input" rows="12" readonly></textarea>
+                        <div class="lz-actions-row"><a id="nbPreviewDl" href="#" class="btn-primary" download><i class="fa-solid fa-download"></i> Tải file này</a></div>
+                    </div>
+                    <div class="log-container"><h4><i class="fa-solid fa-terminal"></i> Nhật ký job</h4><pre id="nbLog">...</pre></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hộp thoại sửa dạng bài (NotebookLM) -->
+        <div id="nbTypeModal" class="lz-modal" style="display: none;">
+            <div class="lz-modal-box">
+                <div class="lz-modal-head"><b id="nbTypeModalTitle">Dạng bài</b><button type="button" id="nbTypeModalClose" class="btn-primary">Đóng</button></div>
+                <div class="form-group"><label>Tên dạng bài</label><input type="text" id="nbTName" class="glass-input" placeholder="VD: Phân tích sản phẩm"></div>
+                <div class="form-group"><label>Chế độ</label>
+                    <select id="nbTMode" class="glass-input"><option value="rewrite">Sáng tạo + bản địa hoá</option><option value="localize">Giữ sát ý gốc + chỉnh cho tự nhiên</option><option value="analyze">Phân tích chuyên sâu</option></select></div>
+                <div class="form-group"><label>Prompt của dạng bài (cách viết / phân tích)</label>
+                    <textarea id="nbTPrompt" class="glass-input" rows="9" placeholder="VD:&#10;- Giọng văn ...&#10;- Cấu trúc ...&#10;- Không bịa số liệu."></textarea></div>
+                <div class="form-group"><label>Nguồn cố định nạp vào mỗi sổ (quy tắc vàng, bài mẫu cao view…). Muốn nhiều nguồn: ngăn cách bằng dòng =====</label>
+                    <textarea id="nbTFixed" class="glass-input" rows="7" placeholder="Dán quy tắc / bài mẫu. Để trống nếu không cần."></textarea></div>
+                <div class="form-group"><label>Độ dài bản viết</label>
+                    <select id="nbTLength" class="glass-input"><option value="same">Tương đương bài gốc</option><option value="longer">Dài hơn</option><option value="shorter">Ngắn hơn</option></select></div>
+                <div class="form-group"><label>Cỡ mỗi đoạn gửi đi (ký tự)</label><input type="number" id="nbTChunk" class="glass-input" value="8000" min="2000" max="40000" step="1000"></div>
+                <div class="form-group"><label>Đối tượng người đọc (tuỳ chọn)</label><input type="text" id="nbTAudience" class="glass-input"></div>
+                <div class="form-group"><label>Từ khoá (mỗi dòng một từ, tuỳ chọn)</label><textarea id="nbTKeywords" class="glass-input" rows="2"></textarea></div>
+                <div class="form-group"><label>Bảng thuật ngữ (A = B, tuỳ chọn)</label><textarea id="nbTGlossary" class="glass-input" rows="2"></textarea></div>
+                <div class="form-group"><label>Yêu cầu thêm (tuỳ chọn)</label><textarea id="nbTExtra" class="glass-input" rows="2"></textarea></div>
+                <label class="lz-check"><input type="checkbox" id="nbTReview"> <span><b>Tự soát lại lần 2</b> (chất lượng cao hơn, chậm gần gấp đôi)</span></label>
+                <button type="button" class="btn-primary" id="nbTSave"><i class="fa-solid fa-floppy-disk"></i> Lưu dạng bài</button>
+            </div>
+        </div>
+
         <!-- Hộp thoại dùng chung cho tab Tái Sáng Tạo -->
         <div id="flAccModal" class="lz-modal" style="display: none;">
             <div class="lz-modal-box" style="max-width:520px;">
@@ -928,5 +1033,6 @@
     <script src="{{ url_for('static', filename='script.js') }}?v={{ asset_v }}"></script>
     <script src="{{ url_for('static', filename='localize.js') }}?v={{ asset_v }}"></script>
     <script src="{{ url_for('static', filename='fleet.js') }}?v={{ asset_v }}"></script>
+    <script src="{{ url_for('static', filename='notebook.js') }}?v={{ asset_v }}"></script>
 </body>
 </html>

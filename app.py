@@ -1131,6 +1131,103 @@ def api_localize_latest():
 
 
 # ======================================================================
+#  MODULE NOTEBOOKLM: Thư mục -> Dạng bài -> dán bài, chạy nhiều nước (dùng lại job/localize_bot)
+# ======================================================================
+import notebook_store
+
+
+@app.route("/api/nb/tree")
+def api_nb_tree():
+    return jsonify({"status": "success", "data": notebook_store.tree()})
+
+
+@app.route("/api/nb/folder", methods=["POST"])
+def api_nb_folder():
+    d = request.get_json(silent=True) or {}
+    try:
+        f = notebook_store.save_folder(d.get("name"), d.get("id"))
+    except (ValueError, KeyError) as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    return jsonify({"status": "success", "folder": f})
+
+
+@app.route("/api/nb/folder/<fid>/delete", methods=["POST"])
+def api_nb_folder_delete(fid):
+    notebook_store.delete_folder(fid)
+    return jsonify({"status": "success"})
+
+
+@app.route("/api/nb/type", methods=["POST"])
+def api_nb_type():
+    d = request.get_json(silent=True) or {}
+    try:
+        t = notebook_store.save_type(d.get("folder_id"), d, d.get("id"))
+    except (ValueError, KeyError) as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    return jsonify({"status": "success", "type": t})
+
+
+@app.route("/api/nb/type/<tid>/delete", methods=["POST"])
+def api_nb_type_delete(tid):
+    notebook_store.delete_type(tid)
+    return jsonify({"status": "success"})
+
+
+@app.route("/api/nb/run", methods=["POST"])
+def api_nb_run():
+    active = _active_job_id()
+    if active:
+        return jsonify({"status": "error", "message": "Đang có một job chạy. Hãy đợi xong hoặc bấm Huỷ trước.",
+                        "job_id": active}), 409
+    form = request.form
+    folder, typ = notebook_store.find_type(form.get("typeId"))
+    if not typ:
+        return jsonify({"status": "error", "message": "Hãy chọn một dạng bài."}), 400
+    articles = _collect_articles(form, request.files)
+    countries = _parse_countries(form)
+    if not articles:
+        return jsonify({"status": "error", "message": "Vui lòng dán bài hoặc tải file .txt!"}), 400
+    if not countries:
+        return jsonify({"status": "error", "message": "Hãy chọn ít nhất một quốc gia."}), 400
+    if len(articles) * len(countries) > MAX_UNITS:
+        return jsonify({"status": "error",
+                        "message": f"Quá nhiều mục ({len(articles)} bài × {len(countries)} nước). Tối đa {MAX_UNITS}."}), 400
+
+    job_id = uuid.uuid4().hex[:16]
+    job_dir = os.path.join(JOBS_DIR, job_id)
+    os.makedirs(os.path.join(job_dir, "sources"), exist_ok=True)
+    meta_articles = []
+    for a in articles:
+        fname = f"{a['id']}.txt"
+        with open(os.path.join(job_dir, "sources", fname), "w", encoding="utf-8") as f:
+            f.write(a["text"])
+        meta_articles.append({"id": a["id"], "name": a["name"], "file": fname, "chars": len(a["text"])})
+    job = {
+        "id": job_id, "created_at": time.time(), "state": "queued", "error": "", "engine": "notebook",
+        "nb": {"folder": folder["name"], "type": typ["name"], "folder_id": folder["id"], "type_id": typ["id"],
+               "fixed_sources": notebook_store.split_fixed(typ.get("fixed_text"))},
+        "base_name": _safe_name(form.get("customFilename"), meta_articles[0]["name"]) if len(meta_articles) == 1
+                     else _safe_name(form.get("customFilename"), "BaiViet"),
+        "articles": meta_articles, "countries": countries, "results": {},
+        "style_id": "", "style_text": typ["prompt"], "mode": typ["mode"],
+        "outline_use": "strict", "source_use": "fresh",
+        "audience": typ.get("audience", "").strip(), "length": typ["length"],
+        "keywords": typ.get("keywords", ""), "glossary": typ.get("glossary", ""),
+        "extra": typ.get("extra", "").strip(), "review": bool(typ["review"]) or form.get("review") in ("1", "true", "on"),
+        "chunk_size": int(typ["chunk_size"]),
+        "profile": (form.get("profileName") or "gemini_profile").strip() or "gemini_profile",
+        "model": "NotebookLM", "thinking": "", "dry_run": form.get("dryRun") in ("1", "true", "on"),
+        "zip": None, "current": None,
+    }
+    for a in meta_articles:
+        for c in countries:
+            job["results"][f"{a['id']}:{c}"] = {"status": "pending"}
+    _write_json(os.path.join(job_dir, "job.json"), job)
+    _launch_job(job_id)
+    return jsonify({"status": "success", "job_id": job_id, "units": len(meta_articles) * len(countries)})
+
+
+# ======================================================================
 #  ĐỘI MÁY: máy chủ (sếp) nhận sản phẩm/báo cáo từ máy nhân viên
 # ======================================================================
 import fleet

@@ -305,6 +305,13 @@ def run_job(job_dir, session_factory=None):
     if session_factory is None:
         if cfg.get("dry_run"):
             session_factory = lambda: DryRunSession(log=job.log, on_tick=job.beat, should_cancel=job.cancelled)
+        elif cfg.get("engine") == "notebook":
+            from notebook_client import NotebookSession
+            nb = cfg.get("nb") or {}
+            session_factory = lambda: NotebookSession(
+                profile_name=cfg.get("profile") or "gemini_profile", fixed_sources=nb.get("fixed_sources") or [],
+                label=" / ".join(x for x in (nb.get("folder"), nb.get("type")) if x),
+                log=job.log, on_tick=job.beat, should_cancel=job.cancelled)
         else:
             session_factory = lambda: GeminiSession(
                 profile_name=cfg.get("profile") or "gemini_profile", model=cfg.get("model"),
