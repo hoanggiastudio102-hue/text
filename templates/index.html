@@ -44,13 +44,20 @@
         <!-- Thanh chọn model Gemini (áp dụng cho mọi tab) -->
         <div class="model-bar">
             <span class="model-bar-title"><i class="fa-solid fa-microchip"></i> Model Gemini</span>
-            <input type="text" id="gmModel" class="glass-input model-input" placeholder="3.1 Pro" title="Gõ đúng tên mục trong menu chọn model của Gemini, VD: 3.1 Pro">
+            <select id="gmModelSel" class="glass-input model-select" title="Chọn model giống menu của Gemini">
+                <option value="3.5 Flash-Lite">3.5 Flash-Lite — trả lời nhanh nhất</option>
+                <option value="3.8 Flash">3.8 Flash — toàn diện</option>
+                <option value="3.1 Pro">3.1 Pro — suy luận nâng cao</option>
+                <option value="__custom__">Khác… (tự gõ tên)</option>
+            </select>
+            <input type="text" id="gmModel" class="glass-input model-input" placeholder="Gõ đúng tên mục trong menu Gemini" style="display: none;" title="Gõ đúng tên mục trong menu chọn model của Gemini, VD: 3.1 Pro">
             <span class="model-bar-title">Mức suy luận</span>
             <select id="gmThinking" class="glass-input model-select">
-                <option value="Cao">Cao</option>
-                <option value="Trung bình">Trung bình</option>
-                <option value="Thấp">Thấp</option>
-                <option value="">Không đổi</option>
+                <option value="Thấp">Thấp — nhanh, hiệu quả</option>
+                <option value="Trung bình">Trung bình — cân bằng</option>
+                <option value="Cao">Cao — cực kỳ kỹ lưỡng</option>
+                <option value="Deep Think">Deep Think — suy luận song song (chậm nhất)</option>
+                <option value="">Không đổi (giữ mức đang chọn trên Gemini)</option>
             </select>
             <button type="button" id="gmSave" class="btn-primary model-btn"><i class="fa-solid fa-floppy-disk"></i> Lưu</button>
             <button type="button" id="gmCheck" class="btn-primary model-btn"><i class="fa-solid fa-stethoscope"></i> Kiểm tra Gemini</button>

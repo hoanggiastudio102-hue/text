@@ -72,7 +72,12 @@
             if (!sel.options.length) sel.innerHTML = '<option value="">(Chưa có phong cách — bấm "Tạo phong cách mới")</option>';
             updateStyleMode();
             if (document.activeElement !== $('gmModel')) $('gmModel').value = d.model || '';
-            $('gmThinking').value = d.thinking == null ? 'Cao' : d.thinking;
+            syncModelSelect();
+            const th = d.thinking == null ? 'Cao' : d.thinking;
+            if (!Array.from($('gmThinking').options).some((o) => o.value === th)) {
+                const o = document.createElement('option'); o.value = th; o.textContent = th; $('gmThinking').appendChild(o);
+            }
+            $('gmThinking').value = th;
         } catch (e) {
             console.error(e);
         }
@@ -126,6 +131,29 @@
         if (keep) $('lzStyle').value = keep; else $('lzStyle').selectedIndex = $('lzStyle').options.length - 1;
         updateStyleMode();
     });
+
+    // ---- chọn model/mức suy luận bằng danh sách ----
+    const PRESETS = ['3.5 Flash-Lite', '3.8 Flash', '3.1 Pro'];
+    function syncModelSelect() {
+        const v = ($('gmModel').value || '').trim();
+        const hit = PRESETS.find((p) => p.toLowerCase() === v.toLowerCase());
+        $('gmModelSel').value = hit || '__custom__';
+        $('gmModel').style.display = hit ? 'none' : '';
+        if (hit) $('gmModel').value = hit;
+    }
+    function ensureThinkingOption() {
+        const t = $('gmThinking');
+        const v = t.value;
+        if (v === '' && !Array.from(t.options).some((o) => o.value === '')) t.value = '';
+    }
+    $('gmModelSel').addEventListener('change', () => {
+        const v = $('gmModelSel').value;
+        if (v === '__custom__') { $('gmModel').style.display = ''; $('gmModel').focus(); return; }
+        $('gmModel').value = v;
+        $('gmModel').style.display = 'none';
+        $('gmSave').click();
+    });
+    $('gmThinking').addEventListener('change', () => $('gmSave').click());
 
     $('gmSave').addEventListener('click', async () => {
         const model = $('gmModel').value.trim();

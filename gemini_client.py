@@ -123,6 +123,7 @@ LEVEL_SYNONYMS = {
     "thấp": ["thấp", "low"], "low": ["thấp", "low"],
     "trung bình": ["trung bình", "medium"], "medium": ["trung bình", "medium"],
     "cao": ["cao", "high"], "high": ["cao", "high"],
+    "deep think": ["deep think"], "deepthink": ["deep think"],
 }
 
 
