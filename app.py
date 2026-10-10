@@ -1,7 +1,15 @@
 import os
 import time
 import sys
-sys.stdout.reconfigure(encoding='utf-8')
+if sys.stdout is None or sys.stderr is None:   # pythonw (chay ngam, khong cua so): ghi log ra file
+    os.makedirs("logs", exist_ok=True)
+    _lf = open(os.path.join("logs", "server.log"), "a", encoding="utf-8", buffering=1)
+    sys.stdout = sys.stdout or _lf
+    sys.stderr = sys.stderr or _lf
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+except Exception:
+    pass
 import subprocess
 import threading
 import json
@@ -1192,6 +1200,11 @@ def _start_agent_thread():
 
 
 if __name__ == "__main__":
+    if sys.stdout is None or sys.stderr is None:   # chay bang pythonw (khong co cua so) -> ghi log ra file
+        os.makedirs("logs", exist_ok=True)
+        _lf = open(os.path.join("logs", "server.log"), "a", encoding="utf-8", buffering=1)
+        sys.stdout = sys.stdout or _lf
+        sys.stderr = sys.stderr or _lf
     print("Khởi động server thành công tại http://localhost:5002")
     # AUTOGEMINI_DEBUG=0 -> chay ngam (khong tu nap lai code); mac dinh giu nhu cu
     _debug = os.environ.get("AUTOGEMINI_DEBUG", "1") != "0"
