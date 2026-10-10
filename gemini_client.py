@@ -121,16 +121,28 @@ def save_account(profile, label):
 # LỖI
 # ---------------------------------------------------------------------------
 def strip_restart(text, log=None):
-    """Gemini đôi khi viết dở rồi viết lại từ đầu trong cùng 1 câu trả lời -> bỏ bản dở, giữ bản đầy đủ."""
+    """Gemini đôi khi viết dở rồi viết lại từ đầu trong cùng 1 câu trả lời -> bỏ bản dở, giữ bản đầy đủ.
+    Nhận diện: phần đầu bài xuất hiện lại ở giữa, ngay sau một chữ cái (câu cụt dính liền) hoặc trùng 50 ký tự đầu."""
     t = (text or "").strip()
-    head = t[:50]
-    if len(head) < 30:
+    if len(t) < 400:
         return t
-    i = t.find(head, 100)
-    if i > 0 and i < len(t) * 0.5:
+    cut = -1
+    h50 = t[:50]
+    i = t.find(h50, 100)
+    if 0 < i < len(t) * 0.5:
+        cut = i
+    else:
+        h = t[:12]
+        j = t.find(h, 100)
+        while j != -1 and j < len(t) * 0.5:
+            if t[j - 1].isalnum():          # "…La máscara deBuenas noches" = câu cụt dính liền bản mới
+                cut = j
+                break
+            j = t.find(h, j + 1)
+    if cut > 0:
         if log:
-            log(f"   ⚠️ phát hiện bản viết dở bị lặp ({i:,} ký tự đầu) — đã bỏ, giữ bản đầy đủ.")
-        return t[i:].strip()
+            log(f"   ⚠️ phát hiện bản viết dở bị lặp ({cut:,} ký tự đầu) — đã bỏ, giữ bản đầy đủ.")
+        return t[cut:].strip()
     return t
 
 
