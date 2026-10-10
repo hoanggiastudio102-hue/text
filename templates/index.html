@@ -34,7 +34,6 @@
             <button class="tab-btn active" data-tab="tab-translate"><i class="fa-solid fa-language"></i> Dịch Thuật Đơn</button>
             <button class="tab-btn" data-tab="tab-batch"><i class="fa-solid fa-layer-group"></i> Dịch Hàng Loạt</button>
             <button class="tab-btn" data-tab="tab-creative"><i class="fa-solid fa-wand-magic-sparkles"></i> Sáng Tạo</button>
-            <button class="tab-btn" data-tab="tab-image"><i class="fa-solid fa-image"></i> Tạo Ảnh</button>
             <button class="tab-btn" data-tab="tab-history"><i class="fa-solid fa-clock-rotate-left"></i> Lịch Sử</button>
             <button class="tab-btn" data-tab="tab-prompts"><i class="fa-solid fa-feather"></i> Prompt</button>
             <button class="tab-btn" data-tab="tab-logs"><i class="fa-solid fa-terminal"></i> Nhật Ký</button>
@@ -451,54 +450,6 @@
                 <div id="creativeEmptyState" class="empty-state">
                     <i class="fa-solid fa-wand-magic"></i>
                     <p>Chưa có dữ liệu. Hãy dán nội dung gốc để AI bắt đầu nhào nặn.</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Image Workspace -->
-        <div id="tab-image" class="workspace tab-content" style="display: none;">
-            <!-- Left: Config -->
-            <div class="card input-section">
-                <h2><i class="fa-solid fa-image"></i> Cấu Hình Tạo Ảnh</h2>
-                <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">Nhập câu lệnh để AI tạo ảnh cho bạn. Nên dùng tiếng Anh để có kết quả tốt nhất.</p>
-                
-                <form id="imageForm">
-                    <!-- Phong cách ảnh -->
-                    <div class="form-group">
-                        <label for="imagePromptId"><i class="fa-solid fa-palette"></i> Mẫu Phong Cách Ảnh:</label>
-                        <select id="imagePromptId" name="imagePromptId" class="glass-input">
-                            <option value="default">✨ Không dùng mẫu (Dùng nguyên văn lệnh của bạn)</option>
-                        </select>
-                    </div>
-
-                    <!-- Đồng bộ nhân vật -->
-                    <div class="form-group">
-                        <label for="imageCharacterSync"><i class="fa-solid fa-user-astronaut"></i> Đồng bộ Ngoại hình Nhân vật (Tùy chọn):</label>
-                        <textarea id="imageCharacterSync" class="glass-input" rows="3" placeholder="Ví dụ: Một cô gái Châu Á 25 tuổi, tóc ngắn màu xanh dương, đeo kính râm..."></textarea>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="imagePromptContent"><i class="fa-solid fa-clapperboard"></i> Bối cảnh / Hành động (Mô tả chi tiết):</label>
-                        <textarea id="imagePromptContent" class="glass-input" rows="5" placeholder="Ví dụ: Đang uống cà phê dưới trời mưa tại Tokyo..." required></textarea>
-                    </div>
-                    
-                    <button type="submit" id="imageSubmitBtn" class="btn-primary" style="width: 100%; justify-content: center;">
-                        <i class="fa-solid fa-wand-magic-sparkles"></i> Tạo Ảnh Tự Động
-                    </button>
-                </form>
-            </div>
-            
-            <!-- Right: Result -->
-            <div class="card output-section">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h2><i class="fa-solid fa-images"></i> Kết Quả Tạo Ảnh</h2>
-                </div>
-                
-                <div id="imageResultContainer" style="display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; align-items: center; min-height: 300px; background: rgba(0,0,0,0.2); border-radius: 12px; padding: 20px;">
-                    <div class="empty-state">
-                        <i class="fa-solid fa-image"></i>
-                        <p>Chưa có ảnh nào. Hãy nhập lệnh và bấm tạo ảnh.</p>
-                    </div>
                 </div>
             </div>
         </div>
