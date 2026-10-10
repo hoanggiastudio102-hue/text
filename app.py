@@ -80,6 +80,24 @@ def save_prompts(prompts):
     with open(PROMPTS_FILE, "w", encoding="utf-8") as f:
         json.dump(prompts, f, ensure_ascii=False, indent=4)
 
+@app.context_processor
+def _asset_version():
+    """Gắn ?v=<thời điểm sửa file> vào css/js để trình duyệt và Cloudflare không giữ bản cũ."""
+    try:
+        sd = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+        v = max(int(os.path.getmtime(os.path.join(sd, f))) for f in os.listdir(sd))
+    except Exception:
+        v = int(time.time())
+    return {"asset_v": v}
+
+
+@app.after_request
+def _no_stale_cache(resp):
+    if request.path.startswith("/static/") or request.path == "/":
+        resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return resp
+
+
 @app.route("/")
 def index():
     return render_template("index.html")

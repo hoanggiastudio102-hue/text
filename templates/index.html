@@ -9,7 +9,7 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ asset_v }}">
 </head>
 <body>
     <div class="glass-bg"></div>
@@ -835,8 +835,8 @@
     <div id="toast" class="toast"></div>
 
     <!-- JS -->
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
-    <script src="{{ url_for('static', filename='localize.js') }}"></script>
-    <script src="{{ url_for('static', filename='fleet.js') }}"></script>
+    <script src="{{ url_for('static', filename='script.js') }}?v={{ asset_v }}"></script>
+    <script src="{{ url_for('static', filename='localize.js') }}?v={{ asset_v }}"></script>
+    <script src="{{ url_for('static', filename='fleet.js') }}?v={{ asset_v }}"></script>
 </body>
 </html>
