@@ -102,6 +102,16 @@ class Job:
 # ---------------------------------------------------------------------------
 # XỬ LÝ 1 MỤC (bài × quốc gia)
 # ---------------------------------------------------------------------------
+def _chunk_len(cfg, article):
+    """Cỡ đoạn: bài thường theo cài đặt; có dàn ý/phân tích thì gửi cả bài một lần nếu <= 28.000 ký tự,
+    dài hơn thì cắt ~18.000 ký tự/đoạn (các đoạn gửi tiếp nối trong cùng một cuộc chat)."""
+    base = int(cfg.get("chunk_size") or 12000)
+    if cfg.get("mode") == "analyze" or article.get("outline_file"):
+        total = int(article.get("chars") or 0)
+        return 60000 if total <= 28000 else max(base, 18000)
+    return base
+
+
 def process_unit(job, session, article, code, chunks):
     cfg = job.data
     outline = ""
@@ -309,7 +319,7 @@ def run_job(job_dir, session_factory=None):
                 try:
                     if article["id"] not in chunk_cache:
                         with open(os.path.join(job.dir, "sources", article["file"]), "r", encoding="utf-8") as f:
-                            chunk_cache[article["id"]] = locales.split_text(f.read(), max(int(cfg.get("chunk_size") or 12000), 60000) if (cfg.get("mode") == "analyze" or article.get("outline_file")) else int(cfg.get("chunk_size") or 12000))
+                            chunk_cache[article["id"]] = locales.split_text(f.read(), _chunk_len(cfg, article))
                     chunks = chunk_cache[article["id"]]
                     if not chunks:
                         raise GeminiError("Bài gốc trống.")

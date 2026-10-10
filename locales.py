@@ -316,7 +316,11 @@ def build_prompt(chunk, country, style_text, mode="rewrite", audience="", length
     if parts > 1:
         sections.append(f"PART INFO: This is part {part} of {parts} of ONE article. Keep terminology, names, voice "
                         "and tone consistent with the earlier parts of this conversation. Output only the text of "
-                        "this part, with no recap of earlier parts.")
+                        "this part, with no recap of earlier parts."
+                        + (" The outline covers the whole article: write ONLY the outline items that this part's "
+                           "reference text corresponds to, continue exactly where the previous part stopped, never repeat "
+                           "an item already written, and do not write the closing section until the last part."
+                           if outline else ""))
 
     if analyze:
         sections.append(
