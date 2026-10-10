@@ -127,6 +127,27 @@ LENGTH_RULES = {
 }
 
 
+CJK_TARGETS = {"JP": 1.0, "CN": 1.0, "TW": 1.0, "HK": 1.0, "KR": 1.0}
+
+
+def _volume(text):
+    """Ước lượng khối lượng nội dung của bài nguồn theo 'số từ tiếng Anh tương đương'."""
+    hangul = len(re.findall(r"[\uac00-\ud7a3]", text))
+    han = len(re.findall(r"[\u4e00-\u9fff\u3040-\u30ff]", text))
+    other = len(re.findall(r"\b\w+\b", re.sub(r"[\uac00-\ud7a3\u4e00-\u9fff\u3040-\u30ff]", " ", text)))
+    return int(hangul * 0.4 + han * 0.6 + other)
+
+
+def target_size(src, code, factor=1.0):
+    """Mục tiêu độ dài cụ thể (chữ/ký tự) cho ngôn ngữ đích, tính từ bài nguồn."""
+    words = max(1, int(_volume(src) * factor))
+    if code in CJK_TARGETS:
+        per = 2.2 if code == "KR" else 1.8
+        n = int(words * per)
+        return f"about {n:,} characters (at least {int(n * 0.9):,})"
+    return f"about {words:,} words (at least {int(words * 0.9):,})"
+
+
 def _lines(value):
     """Tách textarea thành danh sách dòng không rỗng."""
     if not value:
@@ -246,9 +267,17 @@ def build_prompt(chunk, country, style_text, mode="rewrite", audience="", length
                                        "shorter": "Compact version: about 600-900 words."}.get(
             length, "Follow the style guide. If the input is short, produce a complete in-depth report of about "
                     "1,500-2,500 words; if the input is long, analyse it fully without padding."))
+    elif length in ("same", "longer", "shorter") and not outline and len(chunk) > 1500:
+        f = {"same": 1.0, "longer": 1.4, "shorter": 0.65}[length]
+        sections.append("LENGTH: " + LENGTH_RULES[length] + " The source holds roughly the same information as "
+                        + target_size(chunk, "EN", 1.0).replace("about ", "").split(" (")[0]
+                        + " of English. Your output in " + country["language"] + " must be " + target_size(chunk, country["code"], f)
+                        + ". Do NOT summarise, skip, merge or shorten sections: every paragraph, example, number and "
+                        "argument of the source must appear. A shorter result is a failure.")
     elif outline and length == "same":
         sections.append("LENGTH: Let the outline decide: cover every item fully; the total should be roughly comparable "
-                        "to the reference article unless the outline clearly calls for more or less.")
+                        "to the reference article (" + target_size(chunk, country["code"]) + ") unless the outline clearly calls for more. "
+                        "Never summarise or compress: a shorter result is a failure.")
     else:
         sections.append(f"LENGTH: {LENGTH_RULES.get(length, LENGTH_RULES['same'])}")
 
