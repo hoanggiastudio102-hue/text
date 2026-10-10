@@ -937,6 +937,23 @@ def api_gemini_check():
         return jsonify({"status": "error", "message": "Quá thời gian chờ khi kiểm tra Gemini."}), 500
 
 
+@app.route("/api/notebook/probe", methods=["POST"])
+def api_notebook_probe():
+    """Mở NotebookLM bằng tài khoản đã đăng nhập của Tool để xem giao diện thật (chỉ xem, không sửa gì)."""
+    if _active_job_id():
+        return jsonify({"status": "error", "message": "Đang có một job chạy. Hãy đợi job xong."}), 409
+    profile = (request.get_json(silent=True) or {}).get("profileName") or "gemini_profile"
+    try:
+        proc = subprocess.run([sys.executable, os.path.join(APP_DIR, "notebook_probe.py"), "--profile", profile],
+                              cwd=APP_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
+        out = ((proc.stdout or "") + (proc.stderr or "")).strip()[-2500:]
+        return jsonify({"status": "success" if proc.returncode == 0 else "error",
+                        "message": "Đã ghi notebook_debug.json và notebook_debug.png." if proc.returncode == 0
+                        else "Không mở được NotebookLM.", "output": out})
+    except subprocess.TimeoutExpired:
+        return jsonify({"status": "error", "message": "Quá thời gian chờ khi mở NotebookLM."}), 500
+
+
 @app.route("/api/localize/preview", methods=["POST"])
 def api_localize_preview():
     articles = _collect_articles(request.form, request.files)

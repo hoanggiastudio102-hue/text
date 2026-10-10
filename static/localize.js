@@ -188,6 +188,25 @@
         btn.innerHTML = old;
     });
 
+    $('nbCheck').addEventListener('click', async () => {
+        const btn = $('nbCheck');
+        const old = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang mở NotebookLM...';
+        try {
+            const r = await fetch('/api/notebook/probe', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ profileName: profileName() }),
+            });
+            const d = await r.json();
+            openModal(d.status === 'success' ? '✅ Kiểm tra NotebookLM' : '⚠️ Kiểm tra NotebookLM', (d.message ? d.message + '\n\n' : '') + (d.output || ''));
+        } catch (e) {
+            toast('Lỗi kết nối tới máy chủ', true);
+        }
+        btn.disabled = false;
+        btn.innerHTML = old;
+    });
+
     // ---------- hộp thoại ----------
     function openModal(title, text) {
         $('lzModalTitle').textContent = title;
