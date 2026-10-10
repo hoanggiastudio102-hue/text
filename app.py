@@ -982,6 +982,191 @@ def api_localize_latest():
     return jsonify({"status": "success", "job_id": best})
 
 
+# ======================================================================
+#  ĐỘI MÁY: máy chủ (sếp) nhận sản phẩm/báo cáo từ máy nhân viên
+# ======================================================================
+import fleet
+import platform as _platform
+import socket as _socket
+
+app.config["MAX_CONTENT_LENGTH"] = max(app.config.get("MAX_CONTENT_LENGTH") or 0, fleet.MAX_UPLOAD + 5 * 1024 * 1024)
+
+
+def _bearer():
+    h = request.headers.get("Authorization", "")
+    return h[7:].strip() if h.lower().startswith("bearer ") else ""
+
+
+def _admin_only():
+    """Quản trị chỉ mở cho chính máy chủ (localhost, không qua tunnel)."""
+    if not fleet.is_local_request(request):
+        return jsonify({"status": "error", "message": "Chỉ thao tác được trên chính máy chủ (localhost)."}), 403
+    return None
+
+
+# ---- máy nhân viên gọi (cần token)
+@app.route("/api/fleet/pair", methods=["POST"])
+def fleet_pair():
+    data = request.get_json(silent=True) or {}
+    res = fleet.redeem_pair_code(data.get("code"), data.get("hostname", ""))
+    if not res:
+        return jsonify({"status": "error", "message": "Mã ghép sai hoặc đã hết hạn. Nhờ sếp cấp mã mới."}), 400
+    dev_id, token = res
+    name = (fleet._read(fleet.DEVICES_FILE, {}).get(dev_id) or {}).get("name", "")
+    return jsonify({"status": "success", "device_id": dev_id, "token": token, "name": name})
+
+
+@app.route("/api/fleet/heartbeat", methods=["POST"])
+def fleet_heartbeat():
+    dev = fleet.auth_device(_bearer())
+    if not dev:
+        return jsonify({"status": "error", "message": "Token không hợp lệ."}), 401
+    fleet.heartbeat(dev["id"], request.get_json(silent=True) or {})
+    return jsonify({"status": "success"})
+
+
+@app.route("/api/fleet/report", methods=["POST"])
+def fleet_report():
+    dev = fleet.auth_device(_bearer())
+    if not dev:
+        return jsonify({"status": "error", "message": "Token không hợp lệ."}), 401
+    try:
+        meta = json.loads(request.form.get("meta", "{}"))
+    except ValueError:
+        return jsonify({"status": "error", "message": "Báo cáo sai định dạng."}), 400
+    rep = fleet.save_report(dev, meta, request.files.get("file"))
+    return jsonify({"status": "success", "job_id": rep["job_id"]})
+
+
+# ---- quản trị trên máy chủ
+@app.route("/api/fleet/admin/overview")
+def fleet_overview():
+    deny = _admin_only()
+    if deny:
+        return deny
+    return jsonify({"status": "success", "devices": fleet.list_devices(), "reports": fleet.list_reports(limit=200)})
+
+
+@app.route("/api/fleet/admin/pair-code", methods=["POST"])
+def fleet_new_code():
+    deny = _admin_only()
+    if deny:
+        return deny
+    data = request.get_json(silent=True) or {}
+    return jsonify({"status": "success", **fleet.create_pair_code(data.get("name"))})
+
+
+@app.route("/api/fleet/admin/device/<dev_id>", methods=["DELETE"])
+def fleet_device_delete(dev_id):
+    deny = _admin_only()
+    if deny:
+        return deny
+    mode = request.args.get("mode", "revoke")
+    ok = fleet.forget_device(dev_id) if mode == "forget" else fleet.revoke_device(dev_id)
+    return jsonify({"status": "success" if ok else "error"})
+
+
+@app.route("/api/fleet/admin/report/<dev_id>/<job_id>/file")
+def fleet_report_file(dev_id, job_id):
+    deny = _admin_only()
+    if deny:
+        return deny
+    p = fleet.report_file_path(dev_id, job_id)
+    if not p:
+        return jsonify({"status": "error", "message": "Báo cáo này không có file."}), 404
+    return send_file(p, as_attachment=True)
+
+
+# ---- máy nhân viên: cấu hình kết nối tới máy chủ
+@app.route("/api/fleet/agent", methods=["GET"])
+def fleet_agent_status():
+    cfg = fleet.agent_config()
+    ob = fleet.outbox()
+    return jsonify({"status": "success", "paired": bool(cfg.get("token")),
+                    "hub_url": cfg.get("hub_url", ""), "name": cfg.get("name", ""),
+                    "last_ping": _AGENT_STATE.get("last_ping"), "last_error": _AGENT_STATE.get("error", ""),
+                    "sent": sum(1 for v in ob.values() if v.get("sent")),
+                    "failed": sum(1 for v in ob.values() if not v.get("sent"))})
+
+
+@app.route("/api/fleet/agent/pair", methods=["POST"])
+def fleet_agent_pair():
+    deny = _admin_only()
+    if deny:
+        return deny
+    d = request.get_json(silent=True) or {}
+    try:
+        cfg = fleet.agent_pair(d.get("hub_url"), d.get("code"), d.get("name", ""), d.get("cf_id", ""),
+                               d.get("cf_secret", ""), hostname=_socket.gethostname())
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    _AGENT_STATE["error"] = ""
+    _AGENT_WAKE.set()
+    return jsonify({"status": "success", "name": cfg.get("name")})
+
+
+@app.route("/api/fleet/agent/unpair", methods=["POST"])
+def fleet_agent_unpair():
+    deny = _admin_only()
+    if deny:
+        return deny
+    fleet.agent_unpair()
+    return jsonify({"status": "success"})
+
+
+@app.route("/api/fleet/agent/sync", methods=["POST"])
+def fleet_agent_sync():
+    deny = _admin_only()
+    if deny:
+        return deny
+    _AGENT_WAKE.set()
+    return jsonify({"status": "success"})
+
+
+_AGENT_STATE = {}
+_AGENT_WAKE = threading.Event()
+
+
+def _agent_loop():
+    """Luồng nền trên máy nhân viên: báo 'còn sống' + gửi sản phẩm mới về máy chủ."""
+    while True:
+        try:
+            cfg = fleet.agent_config()
+            if cfg.get("token"):
+                jid = _active_job_id()
+                prof = os.path.join(APP_DIR, "profiles", gemini_client.DEFAULT_PROFILE
+                                    if hasattr(gemini_client, "DEFAULT_PROFILE") else "gemini_profile")
+                state = {"job": jid, "model": gemini_client.get_model_name(),
+                         "gemini_logged_in": os.path.isdir(prof) and bool(os.listdir(prof)),
+                         "os": _platform.system(), "version": "2"}
+                fleet.agent_ping(state)
+                _AGENT_STATE["last_ping"] = time.time()
+                _AGENT_STATE["error"] = ""
+                for jd in fleet.pending_jobs(JOBS_DIR):
+                    jid2 = os.path.basename(jd)
+                    try:
+                        ok = fleet.agent_upload_job(jd)
+                        fleet.outbox_mark(jid2, ok, "" if ok else "Máy chủ báo lỗi")
+                    except PermissionError:
+                        raise
+                    except Exception as e:
+                        fleet.outbox_mark(jid2, False, str(e))
+                        _AGENT_STATE["error"] = f"Gửi sản phẩm lỗi: {e}"
+        except PermissionError as e:
+            _AGENT_STATE["error"] = str(e)
+        except Exception as e:
+            _AGENT_STATE["error"] = f"Không nối được máy chủ: {e}"
+        _AGENT_WAKE.wait(30)
+        _AGENT_WAKE.clear()
+
+
+def _start_agent_thread():
+    # Flask debug chạy 2 tiến trình: chỉ bật luồng ở tiến trình thật
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug:
+        threading.Thread(target=_agent_loop, daemon=True, name="fleet-agent").start()
+
+
 if __name__ == "__main__":
     print("Khởi động server thành công tại http://localhost:5002")
+    _start_agent_thread()
     app.run(debug=True, port=5002)

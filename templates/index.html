@@ -35,6 +35,7 @@
             <button class="tab-btn" data-tab="tab-batch"><i class="fa-solid fa-layer-group"></i> Sáng Tạo Ngữ Hàng Loạt</button>
             <button class="tab-btn" data-tab="tab-creative"><i class="fa-solid fa-wand-magic-sparkles"></i> Sáng Tạo</button>
             <button class="tab-btn" data-tab="tab-localize"><i class="fa-solid fa-earth-asia"></i> Tái Sáng Tạo Đa Quốc Gia</button>
+            <button class="tab-btn" data-tab="tab-fleet"><i class="fa-solid fa-network-wired"></i> Đội Máy</button>
             <button class="tab-btn" data-tab="tab-history"><i class="fa-solid fa-clock-rotate-left"></i> Lịch Sử</button>
             <button class="tab-btn" data-tab="tab-prompts"><i class="fa-solid fa-feather"></i> Prompt</button>
             <button class="tab-btn" data-tab="tab-logs"><i class="fa-solid fa-terminal"></i> Nhật Ký</button>
@@ -619,6 +620,61 @@
         </div>
 
         <!-- History Workspace -->
+        <!-- ĐỘI MÁY -->
+        <div id="tab-fleet" class="workspace tab-content" style="display: none;">
+            <div class="glass-card fl-wide">
+                <h2><i class="fa-solid fa-network-wired"></i> Đội Máy — Máy Chủ &amp; Máy Nhân Viên</h2>
+                <p class="lz-hint">Mỗi máy nhân viên chạy tool riêng, đăng nhập Gemini riêng trên máy đó. Làm xong, sản phẩm và báo cáo tự gửi về máy chủ của sếp.</p>
+
+                <div class="fl-grid">
+                    <section class="fl-box" id="flAgentBox">
+                        <h3><i class="fa-solid fa-plug"></i> Máy này → kết nối máy chủ</h3>
+                        <div id="flAgentPaired" style="display:none;">
+                            <div class="fl-status"><span class="fl-dot on" id="flAgentDot"></span><b id="flAgentName"></b></div>
+                            <div class="lz-muted" id="flAgentInfo"></div>
+                            <div class="fl-actions">
+                                <button type="button" class="btn-primary" id="flAgentSync"><i class="fa-solid fa-rotate"></i> Gửi lại ngay</button>
+                                <button type="button" class="btn-primary fl-danger" id="flAgentUnpair">Ngắt kết nối</button>
+                            </div>
+                        </div>
+                        <form id="flAgentForm" autocomplete="off">
+                            <div class="lz-muted" style="margin-bottom:8px;">Sếp cấp mã ghép máy (hiệu lực 15 phút). Nhập vào đây một lần.</div>
+                            <label>Địa chỉ máy chủ</label>
+                            <input type="text" id="flHubUrl" class="glass-input" placeholder="https://gemini.vinhglobal.vn">
+                            <label>Mã ghép máy</label>
+                            <input type="text" id="flCode" class="glass-input" placeholder="VD: K7M2QX9P" style="text-transform:uppercase;">
+                            <details class="fl-adv"><summary>Có Cloudflare Access? (không bắt buộc)</summary>
+                                <label>Access Client ID</label><input type="text" id="flCfId" class="glass-input">
+                                <label>Access Client Secret</label><input type="password" id="flCfSecret" class="glass-input">
+                            </details>
+                            <button type="submit" class="btn-glow" id="flPairBtn"><i class="fa-solid fa-link"></i> Ghép máy</button>
+                            <div class="lz-error" id="flAgentErr" style="display:none;"></div>
+                        </form>
+                    </section>
+
+                    <section class="fl-box" id="flHubBox">
+                        <h3><i class="fa-solid fa-server"></i> Máy chủ — cấp mã cho nhân viên</h3>
+                        <form id="flCodeForm" class="fl-inline">
+                            <input type="text" id="flDevName" class="glass-input" placeholder="Tên máy: VD NV-An" maxlength="40">
+                            <button type="submit" class="btn-primary"><i class="fa-solid fa-key"></i> Cấp mã</button>
+                        </form>
+                        <div id="flCodeOut" class="fl-code" style="display:none;"></div>
+                        <div id="flHubDenied" class="lz-muted" style="display:none;">Phần máy chủ chỉ hiện khi mở tool trực tiếp trên máy chủ (localhost:5002).</div>
+                    </section>
+                </div>
+
+                <div id="flHubData">
+                    <h3 style="margin-top:22px;"><i class="fa-solid fa-computer"></i> Máy nhân viên</h3>
+                    <div id="flDevices" class="fl-devices"><div class="lz-muted">Chưa có máy nào ghép.</div></div>
+                    <h3 style="margin-top:22px;"><i class="fa-solid fa-box-archive"></i> Sản phẩm &amp; báo cáo gửi về</h3>
+                    <div class="fl-tablewrap">
+                        <table class="fl-table"><thead><tr><th>Thời gian</th><th>Máy</th><th>Bài</th><th>Quốc gia</th><th>Kết quả</th><th>Ký tự</th><th></th></tr></thead>
+                        <tbody id="flReports"><tr><td colspan="7" class="lz-muted">Chưa có sản phẩm nào.</td></tr></tbody></table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div id="tab-history" class="workspace tab-content" style="display: none;">
             <div class="card" style="grid-column: 1 / -1;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -747,5 +803,6 @@
     <!-- JS -->
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <script src="{{ url_for('static', filename='localize.js') }}"></script>
+    <script src="{{ url_for('static', filename='fleet.js') }}"></script>
 </body>
 </html>

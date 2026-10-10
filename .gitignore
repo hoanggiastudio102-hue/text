@@ -11,3 +11,6 @@ settings.json
 *.tmp
 outputs/jobs/
 outputs/_diag/
+fleet_data/
+fleet_agent.json
+fleet_outbox.json
