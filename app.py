@@ -1208,6 +1208,68 @@ def fleet_agent_pair():
     return jsonify({"status": "success", "name": cfg.get("name")})
 
 
+@app.route("/api/fleet/login", methods=["POST"])
+def fleet_login():
+    data = request.get_json(silent=True) or {}
+    ip = request.headers.get("Cf-Connecting-Ip") or request.remote_addr or ""
+    try:
+        dev_id, token, name = fleet.login_account(data.get("username"), data.get("password"),
+                                                  data.get("hostname", ""), ip)
+    except PermissionError as e:
+        return jsonify({"status": "error", "message": str(e)}), 403
+    return jsonify({"status": "success", "device_id": dev_id, "token": token, "name": name})
+
+
+@app.route("/api/fleet/admin/accounts", methods=["GET", "POST"])
+def fleet_accounts():
+    deny = _admin_only()
+    if deny:
+        return deny
+    if request.method == "GET":
+        return jsonify({"status": "success", "accounts": fleet.list_accounts()})
+    d = request.get_json(silent=True) or {}
+    try:
+        acc, pw = fleet.create_account(d.get("username"), d.get("display_name", ""), d.get("password", ""))
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    return jsonify({"status": "success", "account": acc, "password": pw})
+
+
+@app.route("/api/fleet/admin/accounts/<username>", methods=["PATCH", "DELETE"])
+def fleet_account_one(username):
+    deny = _admin_only()
+    if deny:
+        return deny
+    if request.method == "DELETE":
+        ok = fleet.delete_account(username)
+        return jsonify({"status": "success" if ok else "error"}), (200 if ok else 404)
+    d = request.get_json(silent=True) or {}
+    try:
+        res = fleet.update_account(username, d.get("display_name"),
+                                   (d.get("password") or "") if d.get("reset_password") else None, d.get("locked"))
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    if not res:
+        return jsonify({"status": "error", "message": "Không có tài khoản này."}), 404
+    return jsonify({"status": "success", "account": res[0], "password": res[1]})
+
+
+@app.route("/api/fleet/agent/login", methods=["POST"])
+def fleet_agent_login():
+    deny = _admin_only()
+    if deny:
+        return deny
+    d = request.get_json(silent=True) or {}
+    try:
+        cfg = fleet.agent_login(d.get("hub_url"), d.get("username"), d.get("password"),
+                                d.get("cf_id", ""), d.get("cf_secret", ""), hostname=_socket.gethostname())
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    _AGENT_STATE["error"] = ""
+    _AGENT_WAKE.set()
+    return jsonify({"status": "success", "name": cfg.get("name")})
+
+
 @app.route("/api/fleet/agent/unpair", methods=["POST"])
 def fleet_agent_unpair():
     deny = _admin_only()

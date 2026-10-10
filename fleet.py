@@ -21,6 +21,7 @@ DATA_DIR = os.path.join(APP_DIR, "fleet_data")
 REPORTS_DIR = os.path.join(DATA_DIR, "reports")
 DEVICES_FILE = os.path.join(DATA_DIR, "devices.json")
 PAIRING_FILE = os.path.join(DATA_DIR, "pairing.json")
+ACCOUNTS_FILE = os.path.join(DATA_DIR, "accounts.json")
 AGENT_FILE = os.path.join(APP_DIR, "fleet_agent.json")
 OUTBOX_FILE = os.path.join(APP_DIR, "fleet_outbox.json")   # job đã gửi / chờ gửi (máy NV)
 
@@ -91,6 +92,170 @@ def redeem_pair_code(code, hostname=""):
         }
         _write(DEVICES_FILE, devices)
     return dev_id, token
+
+
+# ---------------------------------------------------------------- TÀI KHOẢN NHÂN VIÊN
+# Mỗi tài khoản = 1 máy nhân viên. Sếp cấp tài khoản + mật khẩu; máy nhân viên đăng nhập 1 lần để nhận token
+# (máy không lưu mật khẩu). Đăng nhập lại ở máy khác thì token cũ của tài khoản đó bị thay.
+import re as _re
+_USER_RE = _re.compile(r"^[a-z0-9][a-z0-9_.-]{2,29}$")
+_PBKDF_ROUNDS = 200_000
+_FAILS = {}            # key -> [thời điểm sai]  (chống dò mật khẩu)
+MAX_FAILS_USER, MAX_FAILS_IP, FAIL_WINDOW = 8, 40, 10 * 60
+
+
+def _pw_hash(password, salt=None):
+    salt = salt or secrets.token_hex(16)
+    h = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), bytes.fromhex(salt), _PBKDF_ROUNDS).hex()
+    return salt, h
+
+
+def _pw_ok(acc, password):
+    _, h = _pw_hash(password, acc.get("salt"))
+    return hmac.compare_digest(h, acc.get("pw_hash", ""))
+
+
+def gen_password(n=10):
+    return "".join(secrets.choice("abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789") for _ in range(n))
+
+
+def _public(a, devices=None, stats=None):
+    d = (devices or {}).get(a.get("device_id") or "", {})
+    now = time.time()
+    online = bool(d) and not d.get("revoked") and (now - d.get("last_seen", 0)) < ONLINE_SECONDS
+    return {
+        "username": a["username"], "display_name": a.get("display_name") or a["username"],
+        "role": a.get("role", "staff"), "locked": bool(a.get("locked")),
+        "created": a.get("created", 0), "last_login": a.get("last_login", 0), "last_ip": a.get("last_ip", ""),
+        "device_id": a.get("device_id", ""), "online": online, "last_seen": d.get("last_seen", 0),
+        "state": d.get("state", {}), "hostname": d.get("hostname", ""),
+        "stats": (stats or {}).get(a.get("device_id") or "", {"jobs": 0, "units": 0, "chars": 0, "last": 0}),
+    }
+
+
+def list_accounts():
+    accs = _read(ACCOUNTS_FILE, {})
+    devices = _read(DEVICES_FILE, {})
+    stats = {d["id"]: d["stats"] for d in list_devices()}
+    out = [_public(a, devices, stats) for a in accs.values()]
+    out.sort(key=lambda x: (x["locked"], x["username"]))
+    return out
+
+
+def create_account(username, display_name="", password="", role="staff"):
+    u = (username or "").strip().lower()
+    if not _USER_RE.match(u):
+        raise ValueError("Tên tài khoản 3-30 ký tự: chữ thường, số, dấu . _ - (VD: mac02).")
+    password = password or gen_password()
+    if len(password) < 6:
+        raise ValueError("Mật khẩu tối thiểu 6 ký tự.")
+    with _LOCK:
+        accs = _read(ACCOUNTS_FILE, {})
+        if u in accs:
+            raise ValueError("Tài khoản này đã tồn tại.")
+        salt, h = _pw_hash(password)
+        accs[u] = {"username": u, "display_name": (display_name or u).strip()[:60], "role": role,
+                   "salt": salt, "pw_hash": h, "created": time.time(), "last_login": 0, "last_ip": "",
+                   "locked": False, "device_id": ""}
+        _write(ACCOUNTS_FILE, accs)
+    return _public(accs[u]), password
+
+
+def update_account(username, display_name=None, password=None, locked=None):
+    u = (username or "").strip().lower()
+    new_pw = None
+    with _LOCK:
+        accs = _read(ACCOUNTS_FILE, {})
+        a = accs.get(u)
+        if not a:
+            return None
+        if display_name is not None and str(display_name).strip():
+            a["display_name"] = str(display_name).strip()[:60]
+        if password is not None:
+            new_pw = password or gen_password()
+            if len(new_pw) < 6:
+                raise ValueError("Mật khẩu tối thiểu 6 ký tự.")
+            a["salt"], a["pw_hash"] = _pw_hash(new_pw)
+        if locked is not None:
+            a["locked"] = bool(locked)
+        _write(ACCOUNTS_FILE, accs)
+        devices = _read(DEVICES_FILE, {})
+        d = devices.get(a.get("device_id") or "")
+        if d:
+            d["name"] = a["display_name"]
+            if locked is not None:
+                d["revoked"] = bool(locked)         # khoá tài khoản = máy ngừng gửi
+            _write(DEVICES_FILE, devices)
+    return _public(a), new_pw
+
+
+def delete_account(username):
+    u = (username or "").strip().lower()
+    with _LOCK:
+        accs = _read(ACCOUNTS_FILE, {})
+        a = accs.pop(u, None)
+        if not a:
+            return False
+        _write(ACCOUNTS_FILE, accs)
+        devices = _read(DEVICES_FILE, {})
+        if a.get("device_id") in devices:
+            devices[a["device_id"]]["revoked"] = True   # báo cáo cũ vẫn giữ
+            _write(DEVICES_FILE, devices)
+    return True
+
+
+def _throttled(keys):
+    now = time.time()
+    for k, limit in keys:
+        arr = [t for t in _FAILS.get(k, []) if now - t < FAIL_WINDOW]
+        _FAILS[k] = arr
+        if len(arr) >= limit:
+            return True
+    return False
+
+
+def login_account(username, password, hostname="", ip=""):
+    """Máy nhân viên đăng nhập. Trả (device_id, token, display_name). Ném PermissionError/ValueError."""
+    u = (username or "").strip().lower()
+    ip = str(ip or "")[:64]
+    keys = [("u:" + u, MAX_FAILS_USER), ("i:" + ip, MAX_FAILS_IP)]
+    if _throttled(keys):
+        raise PermissionError("Sai quá nhiều lần. Thử lại sau 10 phút.")
+    password = password or ""
+    with _LOCK:
+        accs = _read(ACCOUNTS_FILE, {})
+        a = accs.get(u)
+        ok = False
+        if a:
+            ok = _pw_ok(a, password)
+        else:
+            _pw_hash(password or "x")   # giữ thời gian xử lý gần như nhau
+        if not ok:
+            now = time.time()
+            for k, _ in keys:
+                _FAILS.setdefault(k, []).append(now)
+            raise PermissionError("Sai tài khoản hoặc mật khẩu.")
+        if a.get("locked"):
+            raise PermissionError("Tài khoản đã bị khoá. Liên hệ sếp.")
+        devices = _read(DEVICES_FILE, {})
+        token = secrets.token_urlsafe(32)
+        dev_id = a.get("device_id")
+        if dev_id and dev_id in devices:
+            d = devices[dev_id]
+            d.update(token_hash=_hash(token), revoked=False, hostname=str(hostname)[:60], name=a["display_name"])
+        else:
+            dev_id = "d" + secrets.token_hex(4)
+            devices[dev_id] = {"id": dev_id, "name": a["display_name"], "hostname": str(hostname)[:60],
+                               "token_hash": _hash(token), "created": time.time(), "last_seen": 0,
+                               "revoked": False, "state": {}, "account": u}
+            a["device_id"] = dev_id
+        a["last_login"] = time.time()
+        a["last_ip"] = ip
+        for k, _ in keys:
+            _FAILS.pop(k, None)
+        _write(DEVICES_FILE, devices)
+        _write(ACCOUNTS_FILE, accs)
+    return dev_id, token, a["display_name"]
 
 
 def auth_device(token):
@@ -313,6 +478,29 @@ def agent_pair(hub_url, code, name="", cf_id="", cf_secret="", hostname=""):
         raise RuntimeError(j.get("message") or f"Ghép máy thất bại (HTTP {r.status_code}).")
     cfg = {"hub_url": hub_url, "device_id": j["device_id"], "token": j["token"],
            "name": j.get("name") or name, "cf_id": cf_id, "cf_secret": cf_secret, "paired_at": time.time()}
+    agent_save(cfg)
+    return cfg
+
+
+def agent_login(hub_url, username, password, cf_id="", cf_secret="", hostname=""):
+    """Máy nhân viên đăng nhập bằng tài khoản sếp cấp. Không lưu mật khẩu, chỉ lưu token."""
+    import requests
+    hub_url = (hub_url or "").strip().rstrip("/")
+    if not hub_url.startswith(("http://", "https://")):
+        hub_url = "https://" + hub_url
+    h = {}
+    if cf_id and cf_secret:
+        h = {"CF-Access-Client-Id": cf_id, "CF-Access-Client-Secret": cf_secret}
+    r = requests.post(hub_url + "/api/fleet/login", json={"username": username, "password": password,
+                                                          "hostname": hostname}, headers=h, timeout=20)
+    try:
+        j = r.json()
+    except ValueError:
+        raise RuntimeError("Máy chủ không trả lời đúng định dạng (kiểm tra lại địa chỉ máy chủ / Cloudflare Access).")
+    if r.status_code != 200 or j.get("status") != "success":
+        raise RuntimeError(j.get("message") or f"Đăng nhập thất bại (HTTP {r.status_code}).")
+    cfg = {"hub_url": hub_url, "device_id": j["device_id"], "token": j["token"], "name": j.get("name") or username,
+           "account": username.strip().lower(), "cf_id": cf_id, "cf_secret": cf_secret, "paired_at": time.time()}
     agent_save(cfg)
     return cfg
 

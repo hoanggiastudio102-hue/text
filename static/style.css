@@ -702,3 +702,17 @@ select.glass-input option {
 .lz-pair-sel { padding: 6px 8px; }
 .lz-pair-note { margin-top: 6px; font-size: 0.85rem; color: #f59e0b; }
 @media (max-width: 700px) { .lz-pair-row { grid-template-columns: 1fr; } .lz-pair-arrow { display: none; } }
+
+.fl-wide { grid-column: 1 / -1; }
+.fl-acc-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.fl-acc-head h3 { margin: 0; }
+.fl-acc-tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.fl-acc-tools input { flex: 1; min-width: 200px; }
+.fl-chips button { padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.12); background: transparent; color: var(--text-muted); cursor: pointer; margin-left: 4px; }
+.fl-chips button.active { background: rgba(99,102,241,0.25); color: #c7d2fe; border-color: rgba(99,102,241,0.6); }
+.fl-user { display: flex; gap: 10px; align-items: center; }
+.fl-av { width: 34px; height: 34px; border-radius: 50%; background: #8b7cf6; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; flex: none; }
+.fl-link { background: none; border: 0; color: var(--text-muted); cursor: pointer; padding: 0 4px; }
+.fl-acts { white-space: nowrap; }
+.fl-acts .fl-mini { margin-right: 4px; }
+.fl-cred { background: rgba(0,0,0,0.35); padding: 12px; border-radius: 10px; white-space: pre-wrap; user-select: all; margin: 10px 0; font-size: 0.9rem; }
