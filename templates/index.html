@@ -20,7 +20,7 @@
                 <div class="logo-icon"><i class="fa-solid fa-language"></i></div>
                 <h1>Vinh Global <span>Premium Translator</span></h1>
             </div>
-            <p class="subtitle">Công cụ hỗ trợ xử lý và dịch thuật văn bản cao cấp.</p>
+            <p class="subtitle">Công cụ hỗ trợ sáng tạo và chuyển ngữ nội dung đa quốc gia.</p>
             
             <div class="login-container" style="position: absolute; top: 10px; right: 0;">
                 <button id="loginBtn" class="btn-primary" style="background: rgba(16, 185, 129, 0.1); border-color: var(--success); color: var(--success); padding: 8px 16px; font-size: 13px;">
@@ -31,10 +31,10 @@
 
         <!-- Tabs -->
         <div class="tabs-container">
-            <button class="tab-btn active" data-tab="tab-translate"><i class="fa-solid fa-language"></i> Dịch Thuật Đơn</button>
-            <button class="tab-btn" data-tab="tab-batch"><i class="fa-solid fa-layer-group"></i> Dịch Hàng Loạt</button>
+            <button class="tab-btn active" data-tab="tab-translate"><i class="fa-solid fa-language"></i> Chuyển Ngữ Đơn</button>
+            <button class="tab-btn" data-tab="tab-batch"><i class="fa-solid fa-layer-group"></i> Chuyển Ngữ Hàng Loạt</button>
             <button class="tab-btn" data-tab="tab-creative"><i class="fa-solid fa-wand-magic-sparkles"></i> Sáng Tạo</button>
-            <button class="tab-btn" data-tab="tab-localize"><i class="fa-solid fa-earth-asia"></i> Viết Lại &amp; Bản Địa Hoá</button>
+            <button class="tab-btn" data-tab="tab-localize"><i class="fa-solid fa-earth-asia"></i> Tái Sáng Tạo Đa Quốc Gia</button>
             <button class="tab-btn" data-tab="tab-history"><i class="fa-solid fa-clock-rotate-left"></i> Lịch Sử</button>
             <button class="tab-btn" data-tab="tab-prompts"><i class="fa-solid fa-feather"></i> Prompt</button>
             <button class="tab-btn" data-tab="tab-logs"><i class="fa-solid fa-terminal"></i> Nhật Ký</button>
@@ -151,7 +151,7 @@
                     <!-- Submit Action -->
                     <div class="action-bar">
                         <button type="submit" id="submitBtn" class="btn-glow">
-                            <i class="fa-solid fa-wand-magic-sparkles"></i> Dịch Thuật & Hoàn Thiện
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Chuyển Ngữ & Hoàn Thiện
                         </button>
                     </div>
                 </form>
@@ -287,7 +287,7 @@
 
                     <div class="action-bar">
                         <button type="submit" id="batchSubmitBtn" class="btn-glow">
-                            <i class="fa-solid fa-wand-magic-sparkles"></i> Dịch Hàng Loạt
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Chuyển Ngữ Hàng Loạt
                         </button>
                     </div>
                 </form>
@@ -473,7 +473,7 @@
         <!-- Localize Workspace: viết lại + bản địa hoá nhiều quốc gia -->
         <div id="tab-localize" class="workspace tab-content" style="display: none;">
             <div class="card input-section">
-                <h2><i class="fa-solid fa-earth-asia"></i> Viết Lại &amp; Bản Địa Hoá</h2>
+                <h2><i class="fa-solid fa-earth-asia"></i> Tái Sáng Tạo Đa Quốc Gia</h2>
                 <p class="lz-hint">Dán hoặc tải bài có sẵn, chọn kiểu viết lại và các quốc gia đích. Tool viết thẳng bằng ngôn ngữ bản địa của từng nước (không dịch từng chữ) trên model Gemini đã chọn, mỗi nước một file.</p>
 
                 <form id="lzForm">
@@ -498,7 +498,7 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="lzStyle"><span><i class="fa-solid fa-pen-nib"></i> Kiểu viết lại</span><span id="lzStyleMode" class="char-count"></span></label>
+                        <label for="lzStyle"><span><i class="fa-solid fa-pen-nib"></i> Phong cách tái sáng tạo</span><span id="lzStyleMode" class="char-count"></span></label>
                         <select id="lzStyle" class="glass-input"></select>
                     </div>
 
@@ -568,7 +568,7 @@
 
                     <div class="action-bar lz-actions">
                         <button type="button" id="lzPreviewBtn" class="btn-primary"><i class="fa-solid fa-eye"></i> Xem trước prompt</button>
-                        <button type="submit" id="lzStartBtn" class="btn-glow"><i class="fa-solid fa-bolt"></i> Bắt Đầu Viết Lại</button>
+                        <button type="submit" id="lzStartBtn" class="btn-glow"><i class="fa-solid fa-bolt"></i> Khởi Tạo Nội Dung</button>
                     </div>
                 </form>
             </div>
@@ -610,7 +610,7 @@
             </div>
         </div>
 
-        <!-- Hộp thoại dùng chung cho tab Viết Lại -->
+        <!-- Hộp thoại dùng chung cho tab Tái Sáng Tạo -->
         <div id="lzModal" class="lz-modal" style="display: none;">
             <div class="lz-modal-box">
                 <div class="lz-modal-head"><b id="lzModalTitle"></b><button type="button" id="lzModalClose" class="btn-primary">Đóng</button></div>
@@ -655,7 +655,7 @@
                 <div class="tabs" style="margin-top: 15px; margin-bottom: 10px; display: flex; gap: 10px;">
                     <button class="btn-primary prompt-sub-tab active" data-target="list-translate" style="flex: 1; border-radius: 8px; padding: 8px;"><i class="fa-solid fa-language"></i> Dịch Thuật</button>
                     <button class="btn-primary prompt-sub-tab" data-target="list-creative" style="flex: 1; border-radius: 8px; padding: 8px; background: rgba(255,255,255,0.05); color: var(--text-muted);"><i class="fa-solid fa-wand-magic-sparkles"></i> Sáng Tạo</button>
-                    <button class="btn-primary prompt-sub-tab" data-target="list-rewrite" style="flex: 1; border-radius: 8px; padding: 8px; background: rgba(255,255,255,0.05); color: var(--text-muted);"><i class="fa-solid fa-earth-asia"></i> Viết Lại</button>
+                    <button class="btn-primary prompt-sub-tab" data-target="list-rewrite" style="flex: 1; border-radius: 8px; padding: 8px; background: rgba(255,255,255,0.05); color: var(--text-muted);"><i class="fa-solid fa-earth-asia"></i> Tái Sáng Tạo</button>
                 </div>
                 
                 <div id="list-translate" class="prompt-sub-content active" style="display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; padding-right: 5px;">
@@ -684,7 +684,7 @@
                         <select id="promptType" class="glass-input">
                             <option value="translate">Dành cho Dịch Thuật (Đơn & Hàng Loạt)</option>
                             <option value="creative">Dành cho Sáng Tạo</option>
-                            <option value="rewrite">Dành cho Viết Lại &amp; Bản Địa Hoá</option>
+                            <option value="rewrite">Dành cho Tái Sáng Tạo Đa Quốc Gia</option>
                         </select>
                     </div>
                     <div class="form-group" id="promptModeGroup" style="display: none;">

@@ -445,7 +445,7 @@ promptContent: promptContent,
                         
                         let isBatch = file.name.endsWith('.zip');
                         let badgeClass = isBatch ? 'dich-loat' : 'dich-don';
-                        let badgeText = isBatch ? 'Dịch Hàng Loạt' : 'Dịch Thuật';
+                        let badgeText = isBatch ? 'Chuyển Ngữ Hàng Loạt' : 'Chuyển Ngữ';
                         let iconColor = isBatch ? '#f59e0b' : '#3b82f6';
                         let iconClass = isBatch ? 'fa-file-zipper' : 'fa-file-lines';
                         
@@ -585,7 +585,7 @@ promptContent: promptContent,
         loadingState.style.display = 'block';
         
         submitBtn.disabled = true;
-        submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang Dịch Thuật...';
+        submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang Chuyển Ngữ...';
         
         const logEl = document.getElementById('botLogs');
         if (logEl) logEl.innerText = "Khởi tạo hệ thống...";
@@ -615,7 +615,7 @@ promptContent: promptContent,
             
             loadingState.style.display = 'none';
             submitBtn.disabled = false;
-            submitBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Dịch Thuật & Hoàn Thiện';
+            submitBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Chuyển Ngữ & Hoàn Thiện';
             
             if (response.ok && data.status === 'success') {
                 resultState.style.display = 'block';
@@ -631,7 +631,7 @@ promptContent: promptContent,
                 }
                 
                 loadMiniHistory();
-                showToast("Dịch thuật hoàn tất thành công!");
+                showToast("Chuyển ngữ hoàn tất thành công!");
             } else {
                 emptyState.style.display = 'block';
                 showToast(data.message || "Có lỗi xảy ra", true);
@@ -640,7 +640,7 @@ promptContent: promptContent,
             loadingState.style.display = 'none';
             emptyState.style.display = 'block';
             submitBtn.disabled = false;
-            submitBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Dịch Thuật & Hoàn Thiện';
+            submitBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Chuyển Ngữ & Hoàn Thiện';
             showToast("Lỗi kết nối tới máy chủ", true);
         }
     });
@@ -754,7 +754,7 @@ promptContent: promptContent,
             
             batchLoadingState.style.display = 'none';
             batchSubmitBtn.disabled = false;
-            batchSubmitBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Dịch Hàng Loạt';
+            batchSubmitBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Chuyển Ngữ Hàng Loạt';
             
             // Quay lại tab Batch
             document.querySelector('[data-tab="tab-batch"]').click();
@@ -762,7 +762,7 @@ promptContent: promptContent,
             if (response.ok && data.status === 'success') {
                 batchResultState.style.display = 'block';
                 batchDownloadBtn.href = `/api/download/${data.filename}`;
-                showToast("Dịch hàng loạt hoàn tất thành công!");
+                showToast("Chuyển ngữ hàng loạt hoàn tất thành công!");
             } else {
                 batchEmptyState.style.display = 'block';
                 showToast(data.message || "Có lỗi xảy ra", true);
@@ -771,7 +771,7 @@ promptContent: promptContent,
             batchLoadingState.style.display = 'none';
             batchEmptyState.style.display = 'block';
             batchSubmitBtn.disabled = false;
-            batchSubmitBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Dịch Hàng Loạt';
+            batchSubmitBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Chuyển Ngữ Hàng Loạt';
             showToast("Lỗi kết nối tới máy chủ", true);
         }
     });
@@ -1003,7 +1003,7 @@ promptContent: promptContent,
                     
                     let isBatch = file.name.endsWith('.zip');
                     let badgeClass = isBatch ? 'dich-loat' : 'dich-don';
-                    let badgeText = isBatch ? 'Dịch Hàng Loạt' : 'Dịch Đơn';
+                    let badgeText = isBatch ? 'Chuyển Ngữ Hàng Loạt' : 'Dịch Đơn';
                     let iconColor = isBatch ? '#f59e0b' : '#3b82f6';
                     let iconClass = isBatch ? 'fa-file-zipper' : 'fa-file-lines';
                     

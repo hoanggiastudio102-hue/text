@@ -1,4 +1,4 @@
-/* Tab "Viết Lại & Bản Địa Hoá" + thanh chọn model Gemini.
+/* Tab "Tái Sáng Tạo Đa Quốc Gia" + thanh chọn model Gemini.
    Tự chứa (không phụ thuộc script.js). */
 (function () {
     'use strict';
