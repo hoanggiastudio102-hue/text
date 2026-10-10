@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const target = document.getElementById(btn.getAttribute('data-tab'));
             target.classList.add('active');
             
-            if (target.id === 'tab-translate') {
+            if (target.id === 'tab-translate' || target.id === 'tab-localize') {
                 target.style.display = 'grid';
             } else {
                 target.style.display = 'block';
@@ -89,6 +89,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // Ô "Chế độ" chỉ hiện với mẫu Viết Lại
+    function syncPromptModeVisibility() {
+        const t = document.getElementById('promptType');
+        const g = document.getElementById('promptModeGroup');
+        if (t && g) g.style.display = (t.value === 'rewrite') ? 'block' : 'none';
+    }
+    document.getElementById('promptType').addEventListener('change', syncPromptModeVisibility);
+
     // Render Prompts logic
     window.allPrompts = [];
     
@@ -105,8 +113,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderPrompts() {
         const translateListBody = document.getElementById('list-translate');
         const creativeListBody = document.getElementById('list-creative');
+        const rewriteListBody = document.getElementById('list-rewrite');
         if (translateListBody) translateListBody.innerHTML = '';
         if (creativeListBody) creativeListBody.innerHTML = '';
+        if (rewriteListBody) rewriteListBody.innerHTML = '';
         
         const promptSelect = document.getElementById('promptSelect');
         const batchPromptSelect = document.getElementById('batchPromptSelect');
@@ -167,6 +177,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (pLangElem) pLangElem.value = promptLang;
                     const pCodeElem = document.getElementById('promptCode');
                     if (pCodeElem) pCodeElem.value = p.code || '';
+                    const pModeElem = document.getElementById('promptMode');
+                    if (pModeElem) pModeElem.value = p.mode || 'rewrite';
+                    syncPromptModeVisibility();
                     
                     document.querySelectorAll('.prompt-item').forEach(el => { el.style.background = 'rgba(0,0,0,0.2)'; el.style.borderColor = 'rgba(255,255,255,0.05)'; });
                     div.style.background = 'rgba(59, 130, 246, 0.1)';
@@ -185,6 +198,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (promptLang === 'all' || promptLang === activeBatchTargetLang) {
                     if (batchPromptSelect) batchPromptSelect.innerHTML += `<option value="${p.id}">${p.name}</option>`;
                 }
+            } else if (promptType === 'rewrite' && rewriteListBody) {
+                rewriteListBody.appendChild(div);
             } else if (promptType === 'creative' && creativeListBody) {
                 creativeListBody.appendChild(div);
                 
@@ -292,6 +307,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnNewPrompt) {
         btnNewPrompt.addEventListener('click', () => {
             promptForm.reset();
+            syncPromptModeVisibility();
             document.getElementById('promptName').focus();
             document.querySelectorAll('.prompt-item').forEach(el => { el.style.background = 'rgba(0,0,0,0.2)'; el.style.borderColor = 'rgba(255,255,255,0.05)'; });
         });
@@ -312,13 +328,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                         profileName: document.getElementById('activeProfile') ? document.getElementById('activeProfile').value : 'gemini_profile',
-                        name, content, type, targetLang, code
+                        name, content, type, targetLang, code,
+                        mode: document.getElementById('promptMode') ? document.getElementById('promptMode').value : 'rewrite'
                 })
             });
             const data = await res.json();
             showToast(data.message, data.status === 'error');
             if (data.status === 'success') {
                 promptForm.reset();
+                syncPromptModeVisibility();
                 loadPrompts();
 
     async function loadProfiles() {

@@ -595,7 +595,10 @@ def api_save_prompt():
         
     prompts = get_prompts()
     new_id = str(uuid.uuid4())
-    prompts.append({"id": new_id, "name": name, "content": content, "type": prompt_type, "targetLang": target_lang, "code": code})
+    new_prompt = {"id": new_id, "name": name, "content": content, "type": prompt_type, "targetLang": target_lang, "code": code}
+    if prompt_type == "rewrite":
+        new_prompt["mode"] = "localize" if data.get("mode") == "localize" else "rewrite"
+    prompts.append(new_prompt)
     save_prompts(prompts)
     
     return jsonify({"status": "success", "message": "Đã lưu Mẫu Prompt thành công!"})
@@ -617,6 +620,367 @@ def download_file(filename):
     if os.path.exists(file_path):
         return send_file(file_path, as_attachment=True)
     return "File not found", 404
+
+
+# =====================================================================
+#  VIẾT LẠI & BẢN ĐỊA HOÁ  (nhiều bài × nhiều quốc gia, chạy nền)
+# =====================================================================
+import re as _re
+import zipfile as _zipfile
+import locales
+import gemini_client
+from localize_bot import read_json as _read_json, write_json_atomic as _write_json
+
+JOBS_DIR = os.path.join(OUTPUT_FOLDER, "jobs")
+os.makedirs(JOBS_DIR, exist_ok=True)
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+_JOB_PROCS = {}          # job_id -> Popen (chỉ các job do tiến trình server này mở)
+_JOB_ID_RE = _re.compile(r"^[0-9a-f]{12,32}$")
+MAX_UNITS = 200          # bài × quốc gia tối đa trong 1 job
+STALE_SECONDS = 150      # quá ngần này giây không có nhịp tim -> coi như bot đã chết
+
+
+def _job_dir(job_id):
+    if not _JOB_ID_RE.match(job_id or ""):
+        return None
+    d = os.path.join(JOBS_DIR, job_id)
+    return d if os.path.isdir(d) else None
+
+
+def _read_text_upload(file_storage):
+    raw = file_storage.read()
+    for enc in ("utf-8-sig", "utf-16"):
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
+def _safe_name(name, fallback="bai_viet"):
+    base = os.path.splitext(os.path.basename(name or ""))[0]
+    keep = "".join(ch if (ch.isalnum() or ch in "-_") else "_" for ch in base).strip("_")
+    return keep[:50] or fallback
+
+
+def _collect_articles(form, files):
+    """Gom đầu vào thành danh sách bài riêng: mỗi file .txt, mỗi link YouTube, và phần văn bản dán."""
+    articles = []
+    raw_text = (form.get("rawText") or "").strip()
+    if raw_text:
+        articles.append({"name": _safe_name(form.get("customFilename"), "bai_dan"), "text": raw_text})
+    for f in files.getlist("files[]"):
+        if f and f.filename:
+            text = _read_text_upload(f).strip()
+            if text:
+                articles.append({"name": _safe_name(f.filename), "text": text})
+    for link in (form.get("ytUrl") or "").splitlines():
+        link = link.strip()
+        if not link:
+            continue
+        transcript = extract_youtube_transcript(link)
+        if transcript and not transcript.startswith("[LỖI"):
+            m = _re.search(r"(?:v=|youtu\.be/)([0-9A-Za-z_-]{11})", link)
+            articles.append({"name": f"youtube_{m.group(1) if m else len(articles) + 1}", "text": transcript})
+    # tên không trùng nhau
+    seen = {}
+    for a in articles:
+        n = seen.get(a["name"], 0)
+        seen[a["name"]] = n + 1
+        if n:
+            a["name"] = f"{a['name']}_{n + 1}"
+    for i, a in enumerate(articles, start=1):
+        a["id"] = f"a{i}"
+    return articles
+
+
+def _resolve_style(form):
+    """Trả (style_text, mode) theo mẫu đã chọn."""
+    pid = (form.get("promptId") or "").strip()
+    for p in get_prompts():
+        if p.get("id") == pid and p.get("type") == "rewrite":
+            return p.get("content", ""), p.get("mode", "rewrite")
+    return "", "rewrite"
+
+
+def _parse_countries(form):
+    try:
+        codes = json.loads(form.get("countries") or "[]")
+    except ValueError:
+        codes = []
+    out = []
+    for c in codes:
+        c = str(c).upper()
+        try:
+            locales.get_country(c)
+        except KeyError:
+            continue
+        if c not in out:
+            out.append(c)
+    return out
+
+
+def _job_alive(job_id, data):
+    """Bot còn chạy không? (dựa vào tiến trình đã mở, nếu không thì dựa vào nhịp tim)."""
+    proc = _JOB_PROCS.get(job_id)
+    if proc is not None:
+        return proc.poll() is None
+    return (time.time() - float(data.get("heartbeat") or 0)) < STALE_SECONDS
+
+
+def _reconcile(job_id, data):
+    """Nếu file nói 'running' nhưng bot đã chết -> sửa trạng thái cho đúng."""
+    if data.get("state") == "running" and not _job_alive(job_id, data):
+        for r in data.get("results", {}).values():
+            if r.get("status") in ("running", "pending"):
+                r["status"] = "error"
+                r["error"] = r.get("error") or "Bot dừng đột ngột."
+        data["state"] = "partial" if any(r.get("status") == "done" for r in data.get("results", {}).values()) else "error"
+        data["error"] = data.get("error") or "Bot dừng đột ngột (có thể bị đóng cửa sổ hoặc lỗi trình duyệt). Bấm 'Tiếp tục' để chạy lại phần còn thiếu."
+        try:
+            _write_json(os.path.join(JOBS_DIR, job_id, "job.json"), data)
+        except Exception:
+            pass
+    return data
+
+
+def _active_job_id():
+    for jid in os.listdir(JOBS_DIR) if os.path.isdir(JOBS_DIR) else []:
+        try:
+            data = _read_json(os.path.join(JOBS_DIR, jid, "job.json"))
+        except Exception:
+            continue
+        if data.get("state") == "running" and _job_alive(jid, data):
+            return jid
+    return None
+
+
+def _launch_job(job_id):
+    job_dir = os.path.join(JOBS_DIR, job_id)
+    with open("bot_status.log", "w", encoding="utf-8") as f:
+        f.write("⏳ Đang khởi động tiến trình Viết lại & Bản địa hoá...\n")
+    log_file = open("bot_status.log", "a", encoding="utf-8")
+    proc = subprocess.Popen([sys.executable, os.path.join(APP_DIR, "localize_bot.py"), "--job-dir", job_dir],
+                            cwd=APP_DIR, stdout=log_file, stderr=subprocess.STDOUT)
+    _JOB_PROCS[job_id] = proc
+    # đánh dấu đang chạy ngay để giao diện không thấy trạng thái cũ
+    try:
+        data = _read_json(os.path.join(job_dir, "job.json"))
+        data["state"] = "running"
+        data["heartbeat"] = time.time()
+        _write_json(os.path.join(job_dir, "job.json"), data)
+    except Exception:
+        pass
+
+
+@app.route("/api/locales")
+def api_locales():
+    return jsonify({
+        "status": "success",
+        "data": [{k: c[k] for k in ("code", "flag", "name_vi", "language", "locale")} for c in locales.list_countries()],
+        "model": gemini_client.get_model_name(),
+        "thinking": gemini_client.get_thinking_level(),
+        "rewrite_prompts": [p for p in get_prompts() if p.get("type") == "rewrite"],
+    })
+
+
+@app.route("/api/settings", methods=["GET", "POST"])
+def api_settings():
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        update = {}
+        if "model" in data:
+            m = str(data["model"]).strip()
+            if not m:
+                return jsonify({"status": "error", "message": "Tên model không được để trống."}), 400
+            update["model"] = m[:60]
+        if "thinking" in data:
+            update["thinking"] = str(data["thinking"]).strip()[:30]
+        gemini_client.save_settings(update)
+    return jsonify({"status": "success", "model": gemini_client.get_model_name(),
+                    "thinking": gemini_client.get_thinking_level()})
+
+
+@app.route("/api/gemini/check", methods=["POST"])
+def api_gemini_check():
+    """Mở Gemini bằng tài khoản đã đăng nhập, liệt kê menu model và thử chọn model cấu hình."""
+    if _active_job_id():
+        return jsonify({"status": "error", "message": "Đang có một job chạy. Hãy đợi job xong rồi kiểm tra."}), 409
+    profile = (request.get_json(silent=True) or {}).get("profileName") or "gemini_profile"
+    try:
+        proc = subprocess.run([sys.executable, os.path.join(APP_DIR, "gemini_client.py"), "--check",
+                               "--profile", profile], cwd=APP_DIR, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace", timeout=240)
+        output = (proc.stdout or "") + (proc.stderr or "")
+        return jsonify({"status": "success" if proc.returncode == 0 else "error",
+                        "message": "Chọn được model." if proc.returncode == 0 else "Chưa chọn được model.",
+                        "output": output.strip()[-3000:]})
+    except subprocess.TimeoutExpired:
+        return jsonify({"status": "error", "message": "Quá thời gian chờ khi kiểm tra Gemini."}), 500
+
+
+@app.route("/api/localize/preview", methods=["POST"])
+def api_localize_preview():
+    articles = _collect_articles(request.form, request.files)
+    countries = _parse_countries(request.form)
+    if not articles:
+        return jsonify({"status": "error", "message": "Chưa có bài nào để xem trước."}), 400
+    if not countries:
+        return jsonify({"status": "error", "message": "Hãy chọn ít nhất một quốc gia."}), 400
+    style_text, mode = _resolve_style(request.form)
+    try:
+        chunk_size = int(request.form.get("chunkSize") or 12000)
+    except ValueError:
+        chunk_size = 12000
+    chunks = locales.split_text(articles[0]["text"], chunk_size)
+    prompt = locales.build_prompt(
+        chunks[0], locales.get_country(countries[0]), style_text, mode=mode,
+        audience=request.form.get("audience", ""), length=request.form.get("length", "same"),
+        keywords=request.form.get("keywords", ""), glossary=request.form.get("glossary", ""),
+        extra=request.form.get("extra", ""), part=1, parts=len(chunks))
+    return jsonify({"status": "success", "prompt": prompt, "chunks": len(chunks),
+                    "article": articles[0]["name"], "country": countries[0]})
+
+
+@app.route("/api/localize", methods=["POST"])
+def api_localize_start():
+    active = _active_job_id()
+    if active:
+        return jsonify({"status": "error", "message": "Đang có một job chạy. Hãy đợi xong hoặc bấm Huỷ trước.",
+                        "job_id": active}), 409
+    form = request.form
+    articles = _collect_articles(form, request.files)
+    countries = _parse_countries(form)
+    if not articles:
+        return jsonify({"status": "error", "message": "Vui lòng dán bài, tải file .txt hoặc nhập link YouTube!"}), 400
+    if not countries:
+        return jsonify({"status": "error", "message": "Hãy chọn ít nhất một quốc gia."}), 400
+    if len(articles) * len(countries) > MAX_UNITS:
+        return jsonify({"status": "error",
+                        "message": f"Quá nhiều mục ({len(articles)} bài × {len(countries)} nước). Tối đa {MAX_UNITS}."}), 400
+
+    style_text, mode = _resolve_style(form)
+    job_id = uuid.uuid4().hex[:16]
+    job_dir = os.path.join(JOBS_DIR, job_id)
+    os.makedirs(os.path.join(job_dir, "sources"), exist_ok=True)
+    meta_articles = []
+    for a in articles:
+        fname = f"{a['id']}.txt"
+        with open(os.path.join(job_dir, "sources", fname), "w", encoding="utf-8") as f:
+            f.write(a["text"])
+        meta_articles.append({"id": a["id"], "name": a["name"], "file": fname, "chars": len(a["text"])})
+
+    try:
+        chunk_size = max(2000, min(40000, int(form.get("chunkSize") or 12000)))
+    except ValueError:
+        chunk_size = 12000
+    length = form.get("length", "same")
+    job = {
+        "id": job_id, "created_at": time.time(), "state": "queued", "error": "",
+        "base_name": _safe_name(form.get("customFilename"), meta_articles[0]["name"]) if len(meta_articles) == 1
+                     else (_safe_name(form.get("customFilename"), "BaiViet")),
+        "articles": meta_articles, "countries": countries, "results": {},
+        "style_id": form.get("promptId", ""), "style_text": style_text, "mode": mode,
+        "audience": form.get("audience", "").strip(), "length": length if length in locales.LENGTH_RULES else "same",
+        "keywords": form.get("keywords", ""), "glossary": form.get("glossary", ""),
+        "extra": form.get("extra", "").strip(), "review": form.get("review") in ("1", "true", "on"),
+        "chunk_size": chunk_size, "profile": (form.get("profileName") or "gemini_profile").strip() or "gemini_profile",
+        "model": gemini_client.get_model_name(), "thinking": gemini_client.get_thinking_level(),
+        "dry_run": form.get("dryRun") in ("1", "true", "on"),
+        "zip": None, "current": None,
+    }
+    for a in meta_articles:
+        for c in countries:
+            job["results"][f"{a['id']}:{c}"] = {"status": "pending"}
+    _write_json(os.path.join(job_dir, "job.json"), job)
+    _launch_job(job_id)
+    return jsonify({"status": "success", "job_id": job_id, "units": len(meta_articles) * len(countries)})
+
+
+@app.route("/api/localize/<job_id>")
+def api_localize_status(job_id):
+    d = _job_dir(job_id)
+    if not d:
+        return jsonify({"status": "error", "message": "Không tìm thấy job."}), 404
+    try:
+        data = _reconcile(job_id, _read_json(os.path.join(d, "job.json")))
+    except Exception:
+        return jsonify({"status": "error", "message": "Đang ghi dữ liệu, thử lại sau giây lát."}), 503
+    tail = ""
+    try:
+        with open(os.path.join(d, "run.log"), "r", encoding="utf-8") as f:
+            tail = "".join(f.readlines()[-14:])
+    except OSError:
+        pass
+    # không trả style_text/keywords... dài dòng về giao diện
+    slim = {k: data.get(k) for k in ("id", "state", "error", "articles", "countries", "results", "current",
+                                     "zip", "review", "dry_run", "model", "thinking", "mode",
+                                     "started_at", "finished_at", "created_at")}
+    slim["log_tail"] = tail
+    return jsonify({"status": "success", "job": slim})
+
+
+@app.route("/api/localize/<job_id>/cancel", methods=["POST"])
+def api_localize_cancel(job_id):
+    d = _job_dir(job_id)
+    if not d:
+        return jsonify({"status": "error", "message": "Không tìm thấy job."}), 404
+    open(os.path.join(d, "cancel.flag"), "w").close()
+    return jsonify({"status": "success", "message": "Đã gửi lệnh huỷ — Tool sẽ dừng sau phần đang xử lý."})
+
+
+@app.route("/api/localize/<job_id>/resume", methods=["POST"])
+def api_localize_resume(job_id):
+    d = _job_dir(job_id)
+    if not d:
+        return jsonify({"status": "error", "message": "Không tìm thấy job."}), 404
+    active = _active_job_id()
+    if active:
+        return jsonify({"status": "error", "message": "Đang có một job chạy.", "job_id": active}), 409
+    _launch_job(job_id)
+    return jsonify({"status": "success", "job_id": job_id})
+
+
+@app.route("/api/localize/<job_id>/file")
+def api_localize_file(job_id):
+    d = _job_dir(job_id)
+    rel = (request.args.get("f") or "").replace("\\", "/")
+    parts = [secure_filename(p) for p in rel.split("/") if p]
+    if not d or len(parts) != 2 or not all(parts):
+        return "File not found", 404
+    path = os.path.join(d, "files", parts[0], parts[1])
+    if os.path.isfile(path):
+        return send_file(path, as_attachment=True, download_name=parts[1])
+    return "File not found", 404
+
+
+@app.route("/api/localize/<job_id>/text")
+def api_localize_text(job_id):
+    """Xem trước nội dung 1 kết quả trong giao diện."""
+    d = _job_dir(job_id)
+    rel = (request.args.get("f") or "").replace("\\", "/")
+    parts = [secure_filename(p) for p in rel.split("/") if p]
+    if not d or len(parts) != 2 or not all(parts):
+        return jsonify({"status": "error", "message": "Không tìm thấy file."}), 404
+    path = os.path.join(d, "files", parts[0], parts[1])
+    if not os.path.isfile(path):
+        return jsonify({"status": "error", "message": "Không tìm thấy file."}), 404
+    with open(path, "r", encoding="utf-8") as f:
+        return jsonify({"status": "success", "text": f.read()})
+
+
+@app.route("/api/localize/latest")
+def api_localize_latest():
+    """Job gần nhất (để giao diện tự nối lại tiến độ sau khi tải lại trang)."""
+    best, best_t = None, 0
+    for jid in os.listdir(JOBS_DIR):
+        p = os.path.join(JOBS_DIR, jid, "job.json")
+        if os.path.isfile(p):
+            t = os.path.getmtime(p)
+            if t > best_t:
+                best, best_t = jid, t
+    return jsonify({"status": "success", "job_id": best})
+
 
 if __name__ == "__main__":
     print("Khởi động server thành công tại http://localhost:5002")

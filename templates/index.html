@@ -34,9 +34,25 @@
             <button class="tab-btn active" data-tab="tab-translate"><i class="fa-solid fa-language"></i> Dịch Thuật Đơn</button>
             <button class="tab-btn" data-tab="tab-batch"><i class="fa-solid fa-layer-group"></i> Dịch Hàng Loạt</button>
             <button class="tab-btn" data-tab="tab-creative"><i class="fa-solid fa-wand-magic-sparkles"></i> Sáng Tạo</button>
+            <button class="tab-btn" data-tab="tab-localize"><i class="fa-solid fa-earth-asia"></i> Viết Lại &amp; Bản Địa Hoá</button>
             <button class="tab-btn" data-tab="tab-history"><i class="fa-solid fa-clock-rotate-left"></i> Lịch Sử</button>
             <button class="tab-btn" data-tab="tab-prompts"><i class="fa-solid fa-feather"></i> Prompt</button>
             <button class="tab-btn" data-tab="tab-logs"><i class="fa-solid fa-terminal"></i> Nhật Ký</button>
+        </div>
+
+        <!-- Thanh chọn model Gemini (áp dụng cho mọi tab) -->
+        <div class="model-bar">
+            <span class="model-bar-title"><i class="fa-solid fa-microchip"></i> Model Gemini</span>
+            <input type="text" id="gmModel" class="glass-input model-input" placeholder="3.1 Pro" title="Gõ đúng tên mục trong menu chọn model của Gemini, VD: 3.1 Pro">
+            <span class="model-bar-title">Mức suy luận</span>
+            <select id="gmThinking" class="glass-input model-select">
+                <option value="Cao">Cao</option>
+                <option value="Trung bình">Trung bình</option>
+                <option value="Thấp">Thấp</option>
+                <option value="">Không đổi</option>
+            </select>
+            <button type="button" id="gmSave" class="btn-primary model-btn"><i class="fa-solid fa-floppy-disk"></i> Lưu</button>
+            <button type="button" id="gmCheck" class="btn-primary model-btn"><i class="fa-solid fa-stethoscope"></i> Kiểm tra Gemini</button>
         </div>
 
         <!-- Main Workspace (Single Translate) -->
@@ -454,6 +470,154 @@
             </div>
         </div>
 
+        <!-- Localize Workspace: viết lại + bản địa hoá nhiều quốc gia -->
+        <div id="tab-localize" class="workspace tab-content" style="display: none;">
+            <div class="card input-section">
+                <h2><i class="fa-solid fa-earth-asia"></i> Viết Lại &amp; Bản Địa Hoá</h2>
+                <p class="lz-hint">Dán hoặc tải bài có sẵn, chọn kiểu viết lại và các quốc gia đích. Tool viết thẳng bằng ngôn ngữ bản địa của từng nước (không dịch từng chữ) trên model Gemini đã chọn, mỗi nước một file.</p>
+
+                <form id="lzForm">
+                    <div class="form-group">
+                        <label for="lzRawText"><span><i class="fa-solid fa-align-left icon-text"></i> Dán bài gốc</span><span id="lzCharCount" class="char-count">0 ký tự</span></label>
+                        <textarea id="lzRawText" class="glass-input" rows="7" placeholder="Dán nội dung bài viết có sẵn vào đây (mọi ngôn ngữ)..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label><span><i class="fa-solid fa-file-arrow-up icon-file"></i> Hoặc tải nhiều file bài (.txt) — mỗi file là một bài</span></label>
+                        <div id="lzDropZone" class="drop-zone">
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                            <p>Kéo thả các file .txt vào đây hoặc <span>Click để chọn</span></p>
+                            <input type="file" id="lzFileInput" accept=".txt" multiple style="display: none;">
+                        </div>
+                        <div id="lzFileList" class="file-list"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="lzYt"><span><i class="fa-brands fa-youtube icon-youtube" style="color: #ef4444;"></i> Link YouTube (lấy phụ đề làm bài gốc, mỗi link 1 dòng)</span></label>
+                        <textarea id="lzYt" class="glass-input" rows="2" placeholder="https://www.youtube.com/watch?v=..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="lzStyle"><span><i class="fa-solid fa-pen-nib"></i> Kiểu viết lại</span><span id="lzStyleMode" class="char-count"></span></label>
+                        <select id="lzStyle" class="glass-input"></select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <span><i class="fa-solid fa-flag"></i> Quốc gia đích (ngôn ngữ bản địa)</span>
+                            <span id="lzCountryCount" class="char-count">Đã chọn 0</span>
+                        </label>
+                        <div class="lz-country-tools">
+                            <input type="text" id="lzCountrySearch" class="glass-input" placeholder="Tìm nước...">
+                            <button type="button" class="btn-primary" id="lzSelAll">Chọn hết</button>
+                            <button type="button" class="btn-primary" id="lzSelNone">Bỏ chọn</button>
+                        </div>
+                        <div id="lzCountries" class="country-grid"><div class="lz-muted">Đang tải danh sách...</div></div>
+                    </div>
+
+                    <div class="lz-two-col">
+                        <div class="form-group">
+                            <label for="lzAudience"><span><i class="fa-solid fa-users"></i> Độc giả mục tiêu</span></label>
+                            <input type="text" id="lzAudience" class="glass-input" placeholder="VD: người mua lần đầu, dân văn phòng 25-40 tuổi">
+                        </div>
+                        <div class="form-group">
+                            <label for="lzLength"><span><i class="fa-solid fa-ruler-horizontal"></i> Độ dài đầu ra</span></label>
+                            <select id="lzLength" class="glass-input">
+                                <option value="same">Giữ tương đương bản gốc</option>
+                                <option value="longer">Dài hơn (+30–50%, không bịa thêm)</option>
+                                <option value="shorter">Ngắn gọn hơn (~65%)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="lz-two-col">
+                        <div class="form-group">
+                            <label for="lzKeywords"><span><i class="fa-solid fa-magnifying-glass"></i> Từ khoá cần lồng vào (mỗi dòng 1 từ)</span></label>
+                            <textarea id="lzKeywords" class="glass-input" rows="3" placeholder="smart home&#10;tiết kiệm điện"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="lzGlossary"><span><i class="fa-solid fa-book"></i> Bảng thuật ngữ (gốc = đích)</span></label>
+                            <textarea id="lzGlossary" class="glass-input" rows="3" placeholder="Vinh Global = Vinh Global&#10;nhà thông minh = smart home"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="lzExtra"><span><i class="fa-solid fa-comment-dots"></i> Yêu cầu thêm (tuỳ chọn)</span></label>
+                        <textarea id="lzExtra" class="glass-input" rows="2" placeholder="VD: giọng thân thiện, xưng 'bạn', tránh từ chuyên môn..."></textarea>
+                    </div>
+
+                    <div class="lz-two-col">
+                        <div class="form-group">
+                            <label for="lzChunk"><span><i class="fa-solid fa-scissors"></i> Cắt bài dài thành đoạn</span></label>
+                            <select id="lzChunk" class="glass-input">
+                                <option value="12000">12.000 ký tự / đoạn (khuyên dùng)</option>
+                                <option value="6000">6.000 ký tự / đoạn (bám sát hơn)</option>
+                                <option value="20000">20.000 ký tự / đoạn (ít đoạn hơn)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="lzName"><span><i class="fa-solid fa-file-signature"></i> Tên file (tuỳ chọn)</span></label>
+                            <input type="text" id="lzName" class="glass-input" placeholder="VD: BaiSanPham">
+                        </div>
+                    </div>
+
+                    <div class="lz-checks">
+                        <label class="lz-check"><input type="checkbox" id="lzReview"> <span><b>Tự soát lại lần 2</b> — Gemini rà lỗi/thiếu ý và sửa (chất lượng cao hơn, chậm gần gấp đôi)</span></label>
+                        <label class="lz-check"><input type="checkbox" id="lzDry"> <span>Chạy thử — không dùng Gemini, chỉ kiểm tra luồng và file xuất</span></label>
+                    </div>
+
+                    <div class="action-bar lz-actions">
+                        <button type="button" id="lzPreviewBtn" class="btn-primary"><i class="fa-solid fa-eye"></i> Xem trước prompt</button>
+                        <button type="submit" id="lzStartBtn" class="btn-glow"><i class="fa-solid fa-bolt"></i> Bắt Đầu Viết Lại</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="card output-section">
+                <h2><i class="fa-solid fa-list-check"></i> Tiến Độ &amp; Kết Quả</h2>
+
+                <div id="lzEmpty" class="empty-state">
+                    <i class="fa-solid fa-earth-asia"></i>
+                    <p>Chưa có job nào. Nhập bài, chọn quốc gia rồi bấm Bắt Đầu.</p>
+                </div>
+
+                <div id="lzJob" style="display: none;">
+                    <div class="lz-jobhead">
+                        <span id="lzState" class="lz-badge">—</span>
+                        <span id="lzSummary" class="lz-muted"></span>
+                    </div>
+                    <div class="lz-progress"><div id="lzBar" class="lz-progress-bar"></div></div>
+                    <div id="lzError" class="lz-error" style="display: none;"></div>
+                    <div id="lzGroups"></div>
+
+                    <div class="lz-actions-row">
+                        <button type="button" id="lzCancel" class="btn-primary" style="display: none;"><i class="fa-solid fa-ban"></i> Huỷ</button>
+                        <button type="button" id="lzResume" class="btn-primary" style="display: none;"><i class="fa-solid fa-play"></i> Tiếp tục phần còn thiếu</button>
+                        <a id="lzZip" href="#" class="btn-primary" style="display: none;" download><i class="fa-solid fa-file-zipper"></i> Tải tất cả (ZIP)</a>
+                    </div>
+
+                    <div id="lzPreviewBox" style="display: none;">
+                        <label><span id="lzPreviewTitle">Xem trước</span></label>
+                        <textarea id="lzPreviewText" class="glass-input" rows="12" readonly></textarea>
+                        <div class="lz-actions-row"><a id="lzPreviewDl" href="#" class="btn-primary" download><i class="fa-solid fa-download"></i> Tải file này</a></div>
+                    </div>
+
+                    <div class="log-container">
+                        <h4><i class="fa-solid fa-terminal"></i> Nhật ký job</h4>
+                        <pre id="lzLog">...</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hộp thoại dùng chung cho tab Viết Lại -->
+        <div id="lzModal" class="lz-modal" style="display: none;">
+            <div class="lz-modal-box">
+                <div class="lz-modal-head"><b id="lzModalTitle"></b><button type="button" id="lzModalClose" class="btn-primary">Đóng</button></div>
+                <textarea id="lzModalText" class="glass-input" rows="22" readonly></textarea>
+            </div>
+        </div>
+
         <!-- History Workspace -->
         <div id="tab-history" class="workspace tab-content" style="display: none;">
             <div class="card" style="grid-column: 1 / -1;">
@@ -491,6 +655,7 @@
                 <div class="tabs" style="margin-top: 15px; margin-bottom: 10px; display: flex; gap: 10px;">
                     <button class="btn-primary prompt-sub-tab active" data-target="list-translate" style="flex: 1; border-radius: 8px; padding: 8px;"><i class="fa-solid fa-language"></i> Dịch Thuật</button>
                     <button class="btn-primary prompt-sub-tab" data-target="list-creative" style="flex: 1; border-radius: 8px; padding: 8px; background: rgba(255,255,255,0.05); color: var(--text-muted);"><i class="fa-solid fa-wand-magic-sparkles"></i> Sáng Tạo</button>
+                    <button class="btn-primary prompt-sub-tab" data-target="list-rewrite" style="flex: 1; border-radius: 8px; padding: 8px; background: rgba(255,255,255,0.05); color: var(--text-muted);"><i class="fa-solid fa-earth-asia"></i> Viết Lại</button>
                 </div>
                 
                 <div id="list-translate" class="prompt-sub-content active" style="display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; padding-right: 5px;">
@@ -499,6 +664,10 @@
                 
                 <div id="list-creative" class="prompt-sub-content" style="display: none; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; padding-right: 5px;">
                     <div style="text-align: center; color: var(--text-muted);">Chưa có mẫu lệnh sáng tạo nào.</div>
+                </div>
+
+                <div id="list-rewrite" class="prompt-sub-content" style="display: none; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; padding-right: 5px;">
+                    <div style="text-align: center; color: var(--text-muted);">Chưa có mẫu viết lại nào.</div>
                 </div>
             </div>
             
@@ -515,7 +684,16 @@
                         <select id="promptType" class="glass-input">
                             <option value="translate">Dành cho Dịch Thuật (Đơn & Hàng Loạt)</option>
                             <option value="creative">Dành cho Sáng Tạo</option>
+                            <option value="rewrite">Dành cho Viết Lại &amp; Bản Địa Hoá</option>
                         </select>
+                    </div>
+                    <div class="form-group" id="promptModeGroup" style="display: none;">
+                        <label><i class="fa-solid fa-sliders"></i> Chế độ của mẫu viết lại:</label>
+                        <select id="promptMode" class="glass-input">
+                            <option value="rewrite">Viết lại sáng tạo + bản địa hoá</option>
+                            <option value="localize">Chỉ dịch sát ý + chỉnh cho tự nhiên (không sáng tạo thêm)</option>
+                        </select>
+                        <small class="lz-muted">Mẫu viết lại là "hướng dẫn phong cách". Có thể dùng [COUNTRY], [LANGUAGE], [AUDIENCE] — Tool tự thay theo từng quốc gia. Không cần [TEXT].</small>
                     </div>
                     <div class="form-group">
                         <label><i class="fa-solid fa-globe"></i> Ngôn ngữ áp dụng:</label>
@@ -568,5 +746,6 @@
 
     <!-- JS -->
     <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script src="{{ url_for('static', filename='localize.js') }}"></script>
 </body>
 </html>

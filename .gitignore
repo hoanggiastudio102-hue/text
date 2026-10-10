@@ -1,0 +1,13 @@
+# môi trường & dữ liệu cục bộ — không đưa lên GitHub
+.venv/
+__pycache__/
+*.pyc
+profiles/
+chrome_profile_*/
+uploads/
+bot_status.log
+output_content.txt
+settings.json
+*.tmp
+outputs/jobs/
+outputs/_diag/

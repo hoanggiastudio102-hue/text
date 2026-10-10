@@ -152,6 +152,14 @@ Nội dung cần dịch:
             browser.close()
             return
 
+        # Chọn model Gemini đã cấu hình (mặc định 3.1 Pro). Lỗi ở bước này chỉ cảnh báo để tab cũ vẫn chạy.
+        if mode != "image":
+            try:
+                import gemini_client
+                gemini_client.apply_model_to_page(page, log=print)
+            except Exception as e:
+                print(f"⚠️ Không chọn được model Gemini ({e}). Tiếp tục với model đang bật trên trang.")
+
         response_selector = "message-content"
 
         def split_text_into_chunks(text, max_length=25000):

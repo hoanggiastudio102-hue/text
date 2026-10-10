@@ -52,3 +52,11 @@ Hệ thống Tự động hoá Sáng tạo Nội dung và Dịch thuật Đa ng�
 
 ## Giấy phép
 Thuộc bản quyền sử dụng nội bộ của Vinh Global.
+
+## Viết Lại & Bản Địa Hoá (tab mới)
+- Dán/tải nhiều bài (.txt, YouTube) → chọn kiểu viết lại + nhiều quốc gia → mỗi bài × mỗi nước chạy 1 chat Gemini mới, viết thẳng bằng ngôn ngữ bản địa.
+- Model mặc định: Gemini 3.1 Pro, mức suy luận Cao (đổi ở thanh "Model Gemini", lưu vào settings.json).
+- "Kiểm tra Gemini": mở Gemini, chọn model, chụp menu vào outputs/_diag/ để dò lỗi.
+- "Chạy thử": không dùng Gemini, chỉ kiểm tra luồng + file xuất.
+- Job chạy nền (localize_bot.py), có huỷ/tiếp tục; kết quả zip trong outputs/.
+- Lần đầu: bấm "Đăng nhập" của tool để đăng nhập Gemini trong profile của tool.

@@ -83,5 +83,77 @@
         "type": "image",
         "targetLang": "all",
         "code": ""
+    },
+    {
+        "id": "rw-seo",
+        "name": "[Viết lại] Chuẩn SEO – Blog / Tin tức",
+        "content": "Viết lại thành bài blog/tin chuẩn SEO cho độc giả [COUNTRY]:\n- Tiêu đề (nếu bài gốc có) hấp dẫn, tự nhiên, chứa từ khoá chính, không giật tít sai sự thật.\n- Mở bài 2-3 câu nêu đúng vấn đề độc giả quan tâm; thân bài chia đoạn ngắn (2-4 câu) với tiêu đề phụ rõ nghĩa; kết bài tóm lại hoặc gợi mở bước tiếp theo.\n- Từ khoá xuất hiện tự nhiên, không nhồi nhét; câu chủ động, dễ đọc; ưu tiên cách diễn đạt người [COUNTRY] hay dùng khi tìm kiếm.\n- Giữ nguyên mọi số liệu, tên riêng và dữ kiện của bài gốc.",
+        "type": "rewrite",
+        "targetLang": "all",
+        "code": "",
+        "mode": "rewrite"
+    },
+    {
+        "id": "rw-story",
+        "name": "[Viết lại] Kể chuyện cuốn hút (Storytelling)",
+        "content": "Viết lại theo lối kể chuyện:\n- Mở bằng một chi tiết hoặc hình ảnh gây tò mò rút từ chính bài gốc.\n- Nhịp văn lúc nhanh lúc chậm; dùng chi tiết giác quan và đối thoại khi bài gốc cho phép.\n- Cảm xúc tự nhiên, không sến, không phóng đại.\n- Giữ đúng mạch sự kiện và dữ kiện của bài gốc; không thêm tình tiết, nhân vật hay số liệu mới.",
+        "type": "rewrite",
+        "targetLang": "all",
+        "code": "",
+        "mode": "rewrite"
+    },
+    {
+        "id": "rw-news",
+        "name": "[Viết lại] Tin tức / Báo chí khách quan",
+        "content": "Văn phong báo chí:\n- Đoạn đầu trả lời Ai – Cái gì – Khi nào – Ở đâu – Vì sao (kim tự tháp ngược).\n- Giọng trung lập, không bình luận chủ quan; trích dẫn giữ nguyên nghĩa.\n- Câu ngắn gọn, đoạn 1-3 câu, thông tin quan trọng đặt trước.",
+        "type": "rewrite",
+        "targetLang": "all",
+        "code": "",
+        "mode": "rewrite"
+    },
+    {
+        "id": "rw-video",
+        "name": "[Viết lại] Kịch bản video / Voice-over",
+        "content": "Viết lại thành lời đọc (voice-over) dễ nghe:\n- Câu ngắn, nhịp nói tự nhiên, tránh từ khó phát âm.\n- Mở đầu 1-2 câu hook giữ chân người xem; chuyển ý bằng câu dẫn tự nhiên.\n- Không dùng ký hiệu, markdown hay chỉ dẫn hình ảnh (trừ khi bài gốc có).\n- Số, ngày tháng, đơn vị viết theo cách người [COUNTRY] đọc thành tiếng.",
+        "type": "rewrite",
+        "targetLang": "all",
+        "code": "",
+        "mode": "rewrite"
+    },
+    {
+        "id": "rw-social",
+        "name": "[Viết lại] Mạng xã hội – ngắn gọn, bắt trend",
+        "content": "Viết lại cho mạng xã hội:\n- Giọng thân thiện như nói chuyện, câu ngắn, mỗi đoạn một ý, mở bằng câu thu hút.\n- Emoji dùng tiết chế (tối đa 1-2 mỗi đoạn) và chỉ khi hợp văn hoá [COUNTRY].\n- Kết bằng lời kêu gọi tương tác nhẹ nhàng.\n- Hashtag đặt cuối bài, theo thói quen nền tảng tại [COUNTRY].",
+        "type": "rewrite",
+        "targetLang": "all",
+        "code": "",
+        "mode": "rewrite"
+    },
+    {
+        "id": "rw-deep",
+        "name": "[Viết lại] Chuyên sâu nhưng dễ hiểu",
+        "content": "Giải thích rõ ràng cho [AUDIENCE]:\n- Định nghĩa thuật ngữ ngay lần xuất hiện đầu tiên.\n- Đi từ ý chính đến chi tiết; dùng ví dụ minh hoạ lấy từ bài gốc.\n- Giữ độ chính xác; giọng chuyên gia điềm tĩnh, câu mạch lạc, tránh sáo rỗng.",
+        "type": "rewrite",
+        "targetLang": "all",
+        "code": "",
+        "mode": "rewrite"
+    },
+    {
+        "id": "rw-paraphrase",
+        "name": "[Viết lại] Diễn đạt lại hoàn toàn (giữ ý, đổi cách viết)",
+        "content": "Giữ nguyên toàn bộ ý, thông tin và thứ tự lập luận; thay đổi hoàn toàn cách diễn đạt:\n- Đổi cấu trúc câu, từ ngữ, cách mở và chuyển đoạn.\n- Không sao chép cụm từ dài từ bản gốc.\n- Không thêm, bớt hay làm sai lệch dữ kiện.",
+        "type": "rewrite",
+        "targetLang": "all",
+        "code": "",
+        "mode": "rewrite"
+    },
+    {
+        "id": "rw-localize-only",
+        "name": "[Bản địa] Dịch sát ý, chỉ chỉnh cho tự nhiên",
+        "content": "Dịch trung thành với bản gốc về ý và cấu trúc; chỉ chỉnh để câu văn tự nhiên với người [COUNTRY] (thành ngữ, cách xưng hô, đơn vị, định dạng ngày/tiền). Không sáng tạo thêm, không lược bỏ.",
+        "type": "rewrite",
+        "targetLang": "all",
+        "code": "",
+        "mode": "localize"
     }
 ]
