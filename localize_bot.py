@@ -242,8 +242,16 @@ def finalize(job):
             meta_path = os.path.join(OUTPUT_FOLDER, "metadata.json")
             meta = read_json(meta_path) if os.path.exists(meta_path) else {}
             secs = int(time.time() - cfg.get("started_at", time.time()))
+            try:
+                import gemini_client
+                a = gemini_client.load_accounts().get(cfg.get("profile") or "gemini_profile") or {}
+                acct = " ".join(x for x in (a.get("name"), "(" + a["email"] + ")" if a.get("email") else "") if x)
+            except Exception:
+                acct = ""
+            cfg["account"] = acct
             for h in cfg["history_files"]:
-                meta[h] = {"processing_time": secs}
+                meta[h] = {"processing_time": secs, "count": len(done), "account": acct,
+                           "countries": list(cfg.get("countries") or [])}
             write_json_atomic(meta_path, meta)
         except Exception:
             pass

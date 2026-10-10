@@ -502,6 +502,20 @@ def get_logs():
     return "Đang chờ log..."
 
 import datetime
+
+
+def _zip_count(path):
+    """Số file bài trong 1 file lịch sử: .zip đếm theo nội dung, .txt là 1."""
+    if not path.endswith(".zip"):
+        return 1
+    try:
+        import zipfile as _zf
+        with _zf.ZipFile(path) as z:
+            return len([n for n in z.namelist() if not n.endswith("/")])
+    except Exception:
+        return 1
+
+
 @app.route("/api/history")
 def get_history():
     files = []
@@ -532,7 +546,9 @@ def get_history():
                     "size": round(size / 1024, 2), # KB
                     "time": dt,
                     "timestamp": ctime,
-                    "processing_time": proc_time
+                    "processing_time": proc_time,
+                    "count": (metadata.get(f) or {}).get("count") or _zip_count(path),
+                    "account": (metadata.get(f) or {}).get("account") or ""
                 })
     # Sắp xếp mới nhất lên đầu
     files.sort(key=lambda x: x["timestamp"], reverse=True)

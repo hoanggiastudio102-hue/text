@@ -77,9 +77,10 @@
             return `<tr><td>${fmtT(r.received)}</td><td>${esc(r.device_name)}</td><td>${esc(r.name || (r.articles || []).join(', '))}</td>
                 <td>${esc((r.countries || []).join(' '))}</td>
                 <td><span class="fl-badge ${full ? '' : 'partial'}">${r.units_done}/${r.units_total}</span>${r.units_error ? ' <span class="lz-muted">' + r.units_error + ' lỗi</span>' : ''}</td>
+                <td style="font-size:12px">${esc(r.account || '—')}</td>
                 <td>${num(r.chars)}</td>
                 <td>${r.file ? `<a class="btn-primary fl-mini" style="text-decoration:none" href="/api/fleet-admin/report/${r.device_id}/${r.job_id}/file"><i class="fa-solid fa-download"></i> Tải</a>` : ''}</td></tr>`;
-        }).join('') : '<tr><td colspan="7" class="lz-muted">Chưa có sản phẩm nào trong kỳ này.</td></tr>';
+        }).join('') : '<tr><td colspan="8" class="lz-muted">Chưa có sản phẩm nào trong kỳ này.</td></tr>';
     }
 
 

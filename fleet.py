@@ -322,6 +322,7 @@ def save_report(device, meta, file_storage):
         "chars": int(meta.get("chars") or 0),
         "seconds": int(meta.get("seconds") or 0),
         "model": str(meta.get("model") or "")[:40],
+        "account": str(meta.get("account") or "")[:120],
         "dry_run": bool(meta.get("dry_run")),
         "started_at": meta.get("started_at"), "finished_at": meta.get("finished_at"),
     }
@@ -617,7 +618,7 @@ def job_report(job_dir):
         "units_total": len(results), "units_done": len(done), "units_error": len(err),
         "chars": sum(int(r.get("chars") or 0) for r in done),
         "seconds": int((job.get("finished_at") or time.time()) - (job.get("started_at") or time.time())),
-        "model": job.get("model"), "dry_run": job.get("dry_run"),
+        "model": job.get("model"), "dry_run": job.get("dry_run"), "account": job.get("account") or "",
         "started_at": job.get("started_at"), "finished_at": job.get("finished_at"),
     }
     files_dir = os.path.join(job_dir, "files")

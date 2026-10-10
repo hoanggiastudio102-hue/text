@@ -429,7 +429,7 @@ promptContent: promptContent,
 
     async function loadHistory() {
         const tbody = document.getElementById('historyTableBody');
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Đang tải dữ liệu...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Đang tải dữ liệu...</td></tr>';
         
         try {
             const res = await fetch('/api/history');
@@ -454,6 +454,8 @@ promptContent: promptContent,
                             <td>${file.size} KB</td>
                             <td><span class="badge-pill ${badgeClass}">${badgeText}</span></td>
                             <td><span class="text-ellipsis"><i class="fa-solid ${iconClass}" style="color: ${iconColor}; margin-right: 8px;"></i>${file.name}</span></td>
+                            <td style="text-align:center; font-weight:700;">${file.count || 1}</td>
+                            <td style="font-size:12px; color:#9ca3af;">${file.account ? String(file.account).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])) : '-'}</td>
                             <td style="color: var(--success); font-family: monospace;">${file.processing_time || '-'}</td>
                             <td style="text-align: center;">
                                 <a href="/api/download/${file.name}" download class="btn-primary" style="padding: 6px 12px; font-size: 12px; display: inline-block;"><i class="fa-solid fa-download"></i></a>
