@@ -61,6 +61,59 @@ def get_thinking_level():
 
 
 # ---------------------------------------------------------------------------
+# TÀI KHOẢN GEMINI ĐANG ĐĂNG NHẬP (lưu theo profile, chỉ để hiển thị)
+# ---------------------------------------------------------------------------
+ACCOUNT_FILE = os.path.join(BASE_DIR, "gemini_account.json")
+
+_JS_ACCOUNT = r"""
+() => {
+  const els = Array.from(document.querySelectorAll('a[aria-label], button[aria-label]'));
+  for (const e of els) {
+    const l = e.getAttribute('aria-label') || '';
+    if (/google account|tài khoản google/i.test(l)) return l;
+  }
+  const g = document.querySelector('.greeting, [class*="greeting"], h1');
+  return g ? ('Lời chào: ' + (g.innerText || '').trim()) : null;
+}
+"""
+
+
+def parse_account(label):
+    """'Tài khoản Google: Tên (email@x.com)' -> (tên, email). Không có thì trả phần còn lại."""
+    label = (label or "").strip()
+    m = re.search(r"([\w.+-]+@[\w-]+(?:\.[\w-]+)+)", label)
+    email = m.group(1) if m else ""
+    name = ""
+    if label.lower().startswith(("lời chào", "greeting")):
+        name = re.sub(r"^[^:：]*[:：]\s*", "", label)
+        name = re.sub(r"^(xin chào|chào|hello|hi)\s+", "", name, flags=re.I).split(",")[0].strip()
+    else:
+        m2 = re.search(r"[:：]\s*(.+?)\s*(?:\(|$)", label)
+        if m2:
+            name = m2.group(1).strip()
+    return name, email
+
+
+def load_accounts():
+    try:
+        with open(ACCOUNT_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def save_account(profile, label):
+    name, email = parse_account(label)
+    if not (name or email):
+        return None
+    data = load_accounts()
+    data[profile] = {"name": name, "email": email, "at": time.time()}
+    with open(ACCOUNT_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False)
+    return data[profile]
+
+
+# ---------------------------------------------------------------------------
 # LỖI
 # ---------------------------------------------------------------------------
 class GeminiError(Exception):
@@ -243,6 +296,17 @@ class GeminiSession:
                 f"rồi chạy lại. Chi tiết: {e}")
         self.page = self.ctx.pages[0] if self.ctx.pages else self.ctx.new_page()
         self.new_chat()
+        self.record_account()
+
+    def record_account(self):
+        """Đọc tên/email tài khoản Google đang đăng nhập và lưu để Tool hiển thị. Lỗi thì bỏ qua."""
+        try:
+            label = self.page.evaluate(_JS_ACCOUNT)
+            info = save_account(self.profile_name, label)
+            if info:
+                self.log(f"Tài khoản Gemini: {info.get('name') or ''} {info.get('email') or ''}".strip())
+        except Exception:
+            pass
 
     def close(self):
         try:
@@ -515,7 +579,19 @@ if __name__ == "__main__":
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--profile", default="gemini_profile")
     ap.add_argument("--model", default=None)
+    ap.add_argument("--whoami", action="store_true")
     a = ap.parse_args()
+    if a.whoami:
+        s = GeminiSession(profile_name=a.profile, model="", log=print, headless=True)
+        try:
+            s.start()
+            print(json.dumps(load_accounts().get(a.profile, {}), ensure_ascii=False))
+        except Exception as e:
+            print("ERR", e)
+            sys.exit(1)
+        finally:
+            s.close()
+        sys.exit(0)
     if a.check:
         ok, _ = check(a.profile, a.model)
         sys.exit(0 if ok else 1)

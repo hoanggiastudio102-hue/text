@@ -141,6 +141,25 @@ def logout_profile():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+@app.route("/api/gemini/account", methods=["GET", "POST"])
+def api_gemini_account():
+    """GET: tài khoản Google đã đăng nhập (đã lưu). POST: đọc lại ngay (mở Chrome ẩn vài giây)."""
+    profile = (request.args.get("profile") or (request.get_json(silent=True) or {}).get("profileName")
+               or "gemini_profile").strip() or "gemini_profile"
+    if request.method == "POST":
+        if _active_job_id():
+            return jsonify({"status": "error", "message": "Đang có job chạy, đọc lại sau khi xong."}), 409
+        try:
+            subprocess.run([sys.executable, os.path.join(APP_DIR, "gemini_client.py"), "--whoami", "--profile", profile],
+                           cwd=APP_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
+        except subprocess.TimeoutExpired:
+            return jsonify({"status": "error", "message": "Quá thời gian chờ khi đọc tài khoản."}), 500
+    prof_dir = os.path.join(APP_DIR, "profiles", profile)
+    info = gemini_client.load_accounts().get(profile) or {}
+    return jsonify({"status": "success", "profile": profile, "account": info,
+                    "has_profile": os.path.isdir(prof_dir) and bool(os.listdir(prof_dir))})
+
+
 @app.route("/api/login", methods=["POST"])
 def login_gemini():
     try:

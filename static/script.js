@@ -941,6 +941,23 @@ promptContent: promptContent,
         });
     }
 
+    async function showGeminiAccount(refresh) {
+        const box = document.getElementById('gmAccount');
+        if (!box) return;
+        try {
+            const r = await fetch('/api/gemini/account', refresh ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profileName: 'gemini_profile' }) } : undefined);
+            const d = await r.json();
+            const a = d.account || {};
+            const who = [a.name, a.email ? '(' + a.email + ')' : ''].filter(Boolean).join(' ');
+            if (who) box.innerHTML = '<i class="fa-solid fa-circle-check"></i> ' + who.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+            else if (d.has_profile) box.innerHTML = '<a href="#" id="gmAccRead">Đã đăng nhập — bấm để xem tài khoản nào</a>';
+            else box.innerHTML = '<span class="gm-warn">Chưa đăng nhập Gemini</span>';
+            const rd = document.getElementById('gmAccRead');
+            if (rd) rd.addEventListener('click', (e) => { e.preventDefault(); box.textContent = 'Đang đọc tài khoản…'; showGeminiAccount(true); });
+        } catch (e) { }
+    }
+    showGeminiAccount(false);
+
     if(loginBtn) {
         loginBtn.addEventListener('click', async () => {
             let profileName = 'gemini_profile';
@@ -961,6 +978,8 @@ promptContent: promptContent,
                 if(result.status === 'success') {
                     showToast(result.message);
                     if(typeof loadProfiles === 'function') loadProfiles();
+                    const gb = document.getElementById('gmAccount'); if (gb) gb.textContent = 'Đang đọc tài khoản…';
+                    showGeminiAccount(true);
                 } else {
                     showToast(result.message, true);
                 }
