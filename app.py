@@ -711,8 +711,18 @@ def _collect_articles(form, files):
     """Gom đầu vào thành danh sách bài riêng: mỗi file .txt, mỗi link YouTube, và phần văn bản dán."""
     articles = []
     raw_text = (form.get("rawText") or "").strip()
-    if raw_text:
-        articles.append({"name": _safe_name(form.get("customFilename"), "bai_dan"), "text": raw_text})
+    per_line = form.get("perLine") in ("1", "true", "on")
+    if raw_text and per_line:
+        # chế độ hàng loạt chủ đề: mỗi dòng là một chủ đề/bài riêng
+        for line in raw_text.splitlines():
+            line = line.strip()
+            if line:
+                articles.append({"name": _safe_name(line, "chu_de"), "text": line})
+    elif raw_text:
+        custom = (form.get("customFilename") or "").strip()
+        one_line = "\n" not in raw_text and len(raw_text) <= 100
+        fallback = _safe_name(raw_text, "bai_dan") if one_line else "bai_dan"
+        articles.append({"name": _safe_name(custom, fallback) if custom else fallback, "text": raw_text})
     for f in files.getlist("files[]"):
         if f and f.filename:
             text = _read_text_upload(f).strip()

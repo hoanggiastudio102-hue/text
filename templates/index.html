@@ -479,8 +479,8 @@
 
                 <form id="lzForm">
                     <div class="form-group">
-                        <label for="lzRawText"><span><i class="fa-solid fa-align-left icon-text"></i> Dán bài gốc</span><span id="lzCharCount" class="char-count">0 ký tự</span></label>
-                        <textarea id="lzRawText" class="glass-input" rows="7" placeholder="Dán nội dung bài viết có sẵn vào đây (mọi ngôn ngữ)..."></textarea>
+                        <label for="lzRawText"><span><i class="fa-solid fa-align-left icon-text"></i> Dán bài gốc — hoặc chỉ gõ chủ đề / tên nhân vật (với mẫu Phân tích)</span><span id="lzCharCount" class="char-count">0 ký tự</span></label>
+                        <textarea id="lzRawText" class="glass-input" rows="7" placeholder="Dán bài có sẵn (mọi ngôn ngữ). Với mẫu [Phân tích], chỉ cần gõ 1 dòng, VD: Napoleon Bonaparte  |  Napoleon và Wellington  |  Quyết định xâm lược Nga năm 1812 của Napoleon"></textarea>
                     </div>
 
                     <div class="form-group">
@@ -571,7 +571,8 @@
 
                     <div class="lz-checks">
                         <label class="lz-check"><input type="checkbox" id="lzReview"> <span><b>Tự soát lại lần 2</b> — Gemini rà lỗi/thiếu ý và sửa (chất lượng cao hơn, chậm gần gấp đôi)</span></label>
-                        <label class="lz-check"><input type="checkbox" id="lzDry"> <span>Chạy thử — không dùng Gemini, chỉ kiểm tra luồng và file xuất</span></label>
+                        <label class="lz-check"><input type="checkbox" id="lzPerLine"> <span>Mỗi dòng là một chủ đề riêng (chạy hàng loạt nhiều chủ đề; mỗi chủ đề ra file riêng)</span></label>
+                    <label class="lz-check"><input type="checkbox" id="lzDry"> <span>Chạy thử — không dùng Gemini, chỉ kiểm tra luồng và file xuất</span></label>
                     </div>
 
                     <div class="action-bar lz-actions">

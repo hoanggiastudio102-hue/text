@@ -249,6 +249,7 @@
         fd.append('customFilename', $('lzName').value.trim());
         fd.append('review', $('lzReview').checked ? '1' : '');
         fd.append('dryRun', $('lzDry').checked ? '1' : '');
+        fd.append('perLine', $('lzPerLine') && $('lzPerLine').checked ? '1' : '');
         fd.append('profileName', profileName());
         return fd;
     }
