@@ -1193,5 +1193,8 @@ def _start_agent_thread():
 
 if __name__ == "__main__":
     print("Khởi động server thành công tại http://localhost:5002")
+    # AUTOGEMINI_DEBUG=0 -> chay ngam (khong tu nap lai code); mac dinh giu nhu cu
+    _debug = os.environ.get("AUTOGEMINI_DEBUG", "1") != "0"
+    app.debug = _debug
     _start_agent_thread()
-    app.run(debug=True, port=5002)
+    app.run(debug=_debug, port=5002, use_reloader=_debug)
