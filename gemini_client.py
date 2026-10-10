@@ -503,7 +503,7 @@ class GeminiSession:
                     break
                 raise GeminiError("Quá thời gian chờ, Gemini không trả về nội dung.")
 
-        text = text.strip()
+        text = strip_restart(text, self.log)
         if looks_like_limit_message(text):
             raise GeminiLimitError(f"Gemini báo lỗi/hết lượt: {text[:200]}")
         return text
