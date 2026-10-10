@@ -120,6 +120,20 @@ def save_account(profile, label):
 # ---------------------------------------------------------------------------
 # LỖI
 # ---------------------------------------------------------------------------
+def strip_restart(text, log=None):
+    """Gemini đôi khi viết dở rồi viết lại từ đầu trong cùng 1 câu trả lời -> bỏ bản dở, giữ bản đầy đủ."""
+    t = (text or "").strip()
+    head = t[:50]
+    if len(head) < 30:
+        return t
+    i = t.find(head, 100)
+    if i > 0 and i < len(t) * 0.5:
+        if log:
+            log(f"   ⚠️ phát hiện bản viết dở bị lặp ({i:,} ký tự đầu) — đã bỏ, giữ bản đầy đủ.")
+        return t[i:].strip()
+    return t
+
+
 class GeminiError(Exception):
     pass
 
