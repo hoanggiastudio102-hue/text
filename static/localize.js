@@ -52,14 +52,23 @@
             const sel = $('lzStyle');
             const prev = sel.value;
             sel.innerHTML = '';
+            const groups = {};
             d.rewrite_prompts.forEach((p) => {
                 const o = document.createElement('option');
                 o.value = p.id;
                 o.textContent = p.name;
                 o.dataset.mode = p.mode || 'rewrite';
-                sel.appendChild(o);
+                const m = /^\[([^\]]+)\]/.exec(p.name);
+                const gname = m ? m[1] : 'Khác';
+                if (!groups[gname]) {
+                    groups[gname] = document.createElement('optgroup');
+                    groups[gname].label = gname === 'Phân tích' ? 'Phân tích chuyên sâu (lịch sử, nhân vật…)' : gname === 'Sáng tạo' ? 'Sáng tạo nội dung' : gname;
+                    sel.appendChild(groups[gname]);
+                }
+                groups[gname].appendChild(o);
             });
             if (prev) sel.value = prev;
+            if (!sel.value && sel.options.length) sel.selectedIndex = 0;
             if (!sel.options.length) sel.innerHTML = '<option value="">(Chưa có phong cách — bấm "Tạo phong cách mới")</option>';
             updateStyleMode();
             if (document.activeElement !== $('gmModel')) $('gmModel').value = d.model || '';
@@ -71,7 +80,8 @@
 
     function updateStyleMode() {
         const o = $('lzStyle').selectedOptions[0];
-        $('lzStyleMode').textContent = o && o.dataset.mode === 'localize' ? 'Chế độ: giữ sát ý gốc, chỉ chỉnh cho tự nhiên' : 'Chế độ: sáng tạo + bản địa hoá';
+        const md = o && o.dataset.mode;
+        $('lzStyleMode').textContent = md === 'localize' ? 'Chế độ: giữ sát ý gốc, chỉ chỉnh cho tự nhiên' : md === 'analyze' ? 'Chế độ: phân tích chuyên sâu (dán bài hoặc chỉ cần gõ chủ đề / tên nhân vật)' : 'Chế độ: sáng tạo + bản địa hoá';
     }
     $('lzStyle').addEventListener('change', updateStyleMode);
 
@@ -88,7 +98,7 @@
         styleEditId = p && !asCopy ? p.id : null;
         $('lzStyleModalTitle').textContent = styleEditId ? 'Sửa phong cách' : 'Tạo phong cách mới';
         $('lzSName').value = p ? (asCopy ? p.name + ' (bản sao)' : p.name) : '';
-        $('lzSMode').value = p && p.mode === 'localize' ? 'localize' : 'rewrite';
+        $('lzSMode').value = p && (p.mode === 'localize' || p.mode === 'analyze') ? p.mode : 'rewrite';
         $('lzSContent').value = p ? p.content : '';
         $('lzStyleModal').style.display = 'flex';
     }

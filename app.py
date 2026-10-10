@@ -623,7 +623,7 @@ def api_save_prompt():
     new_id = str(uuid.uuid4())
     new_prompt = {"id": new_id, "name": name, "content": content, "type": prompt_type, "targetLang": target_lang, "code": code}
     if prompt_type == "rewrite":
-        new_prompt["mode"] = "localize" if data.get("mode") == "localize" else "rewrite"
+        new_prompt["mode"] = data.get("mode") if data.get("mode") in ("localize", "analyze") else "rewrite"
     prompts.append(new_prompt)
     save_prompts(prompts)
     
@@ -641,7 +641,7 @@ def api_update_prompt(prompt_id):
         if p.get("id") == prompt_id:
             p["name"], p["content"] = name, content
             if p.get("type") == "rewrite":
-                p["mode"] = "localize" if data.get("mode") == "localize" else "rewrite"
+                p["mode"] = data.get("mode") if data.get("mode") in ("localize", "analyze") else "rewrite"
             save_prompts(prompts)
             return jsonify({"status": "success", "message": "Đã cập nhật."})
     return jsonify({"status": "error", "message": "Không tìm thấy mẫu."}), 404
@@ -876,6 +876,8 @@ def api_localize_preview():
         chunk_size = int(request.form.get("chunkSize") or 12000)
     except ValueError:
         chunk_size = 12000
+    if mode == "analyze":
+        chunk_size = max(chunk_size, 60000)
     chunks = locales.split_text(articles[0]["text"], chunk_size)
     prompt = locales.build_prompt(
         chunks[0], locales.get_country(countries[0]), style_text, mode=mode,

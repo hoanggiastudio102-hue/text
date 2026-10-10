@@ -279,7 +279,7 @@ def run_job(job_dir, session_factory=None):
                 try:
                     if article["id"] not in chunk_cache:
                         with open(os.path.join(job.dir, "sources", article["file"]), "r", encoding="utf-8") as f:
-                            chunk_cache[article["id"]] = locales.split_text(f.read(), int(cfg.get("chunk_size") or 12000))
+                            chunk_cache[article["id"]] = locales.split_text(f.read(), max(int(cfg.get("chunk_size") or 12000), 60000) if cfg.get("mode") == "analyze" else int(cfg.get("chunk_size") or 12000))
                     chunks = chunk_cache[article["id"]]
                     if not chunks:
                         raise GeminiError("Bài gốc trống.")

@@ -156,7 +156,16 @@ def build_prompt(chunk, country, style_text, mode="rewrite", audience="", length
     is_same = country["code"] == "SAME"
     style_text = fill_template_vars(style_text, country, audience).strip()
 
-    if mode == "localize":
+    analyze = (mode == "analyze")
+    if analyze:
+        lang_txt = "the same language as the input" if is_same else country["language"]
+        task = (f"Using the INPUT below as the subject (it may be a full article, notes, or just a short topic / name / "
+                f"event), write an original, in-depth analytical piece that follows the STYLE GUIDE exactly. Write it "
+                f"in {lang_txt}" + ("" if is_same else f" for readers in {name_en(country)}") + ", as a senior "
+                "analyst and writer would. Use the input's own facts first; where needed, add well-established, "
+                "verifiable background knowledge, but clearly separate documented fact from your own inference or "
+                "interpretation, and say so plainly when evidence is thin or historians disagree.")
+    elif mode == "localize":
         if is_same:
             task = ("Lightly polish the source article in its own language: fix awkward phrasing and "
                     "flow while keeping the structure, wording and meaning as close to the source as possible.")
@@ -184,7 +193,19 @@ def build_prompt(chunk, country, style_text, mode="rewrite", audience="", length
     if style_text:
         sections.append(f"STYLE GUIDE:\n{style_text}")
 
-    if not is_same:
+    if analyze:
+        sections.append(
+            "ACCURACY RULES FOR ANALYSIS (strict):\n"
+            "- Never invent quotes, statistics, dates, sources, documents or events. If you are not sure of a detail, "
+            "leave it out or mark it as uncertain.\n"
+            "- Do not put made-up words in the mouth of a real person. Any simulation, imagined dialogue or "
+            "'what if' scenario must be labelled clearly as imagination at the start, and must not be presented as a real "
+            "statement or real history.\n"
+            "- For living people, analyse only public, documented conduct and publicly stated views; no medical or "
+            "clinical diagnosis, no speculation about private life.\n"
+            "- Distinguish fact / contested claim / your interpretation. Present opposing views fairly.\n"
+            "- Adapt names, terms, units and examples to readers in " + name_en(country) + " where natural.")
+    elif not is_same:
         sections.append(f"LOCALIZATION RULES for {name_en(country)} ({country['locale']}):\n- {country['notes']}\n"
                         "- Convert currencies, units and date formats to local conventions only when the source uses "
                         "them as generic examples; keep exact figures, quotes and official names intact.\n"
@@ -199,7 +220,13 @@ def build_prompt(chunk, country, style_text, mode="rewrite", audience="", length
     if aud:
         sections.append(f"TARGET AUDIENCE: {aud}")
 
-    sections.append(f"LENGTH: {LENGTH_RULES.get(length, LENGTH_RULES['same'])}")
+    if analyze:
+        sections.append("LENGTH: " + {"longer": "Go deeper and longer: about 2,500-4,000 words.",
+                                       "shorter": "Compact version: about 600-900 words."}.get(
+            length, "Follow the style guide. If the input is short, produce a complete in-depth report of about "
+                    "1,500-2,500 words; if the input is long, analyse it fully without padding."))
+    else:
+        sections.append(f"LENGTH: {LENGTH_RULES.get(length, LENGTH_RULES['same'])}")
 
     kw = _lines(keywords)
     if kw:
@@ -220,6 +247,17 @@ def build_prompt(chunk, country, style_text, mode="rewrite", audience="", length
                         "and tone consistent with the earlier parts of this conversation. Output only the text of "
                         "this part, with no recap of earlier parts.")
 
+    if analyze:
+        sections.append(
+            "OUTPUT RULES (strict):\n"
+            "- Output ONLY the finished analysis. No preamble like 'Here is…', no notes about the style guide, "
+            "no closing remarks, no code fences.\n"
+            "- Use the structure the style guide asks for; write headings as plain lines, short paragraphs, "
+            "lists or small tables only where they help.\n"
+            "- Complete the whole piece; do not stop early.")
+        sections.append("INPUT (subject / source material):\n<<<\n" + chunk.strip() + "\n>>>")
+        return "\n\n".join(sections)
+
     sections.append(
         "OUTPUT RULES (strict):\n"
         "- Output ONLY the finished text. No preamble, no title like 'Here is…', no notes, no explanation, "
@@ -236,6 +274,12 @@ def build_prompt(chunk, country, style_text, mode="rewrite", audience="", length
 def build_review_prompt(country, mode="rewrite", part=1, parts=1):
     """Bước 2 (tuỳ chọn): bắt Gemini tự soát lại đúng bản vừa viết trong cùng cuộc chat."""
     is_same = country["code"] == "SAME"
+    if mode == "analyze":
+        return ("Now act as a strict fact-checking editor and review the analysis you just wrote. Check for: "
+                "1) invented or doubtful facts, dates, numbers, quotes or sources; 2) claims presented as fact that are "
+                "really interpretation; 3) missing sections the style guide required; 4) one-sided treatment where "
+                "balance was requested; 5) stiff, translated-sounding or padded phrasing. Fix every problem and output "
+                "the COMPLETE corrected final text only, with no review notes.")
     lang_check = ("wrong language variant, spelling or register" if not is_same
                   else "changes of language")
     part_note = f" (part {part}/{parts})" if parts > 1 else ""
