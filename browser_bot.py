@@ -2,7 +2,10 @@ import time
 import os
 import argparse
 import sys
-sys.stdout.reconfigure(encoding='utf-8')
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+except Exception:
+    pass
 from playwright.sync_api import sync_playwright
 
 import json
