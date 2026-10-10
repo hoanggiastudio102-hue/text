@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Chạy 1 "job" Viết lại & Bản địa hoá: với mỗi (bài × quốc gia) -> chat mới trên Gemini (model đã cấu hình),
+Chạy 1 "job" Sáng tạo & Bản địa hoá: với mỗi (bài × quốc gia) -> chat mới trên Gemini (model đã cấu hình),
 viết lại/bản địa hoá từng đoạn của bài, (tuỳ chọn) tự soát lại lần 2, lưu 1 file .txt,
 cuối cùng nén ZIP.
 

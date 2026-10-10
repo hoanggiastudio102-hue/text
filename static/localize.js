@@ -71,7 +71,7 @@
 
     function updateStyleMode() {
         const o = $('lzStyle').selectedOptions[0];
-        $('lzStyleMode').textContent = o && o.dataset.mode === 'localize' ? 'Chế độ: dịch sát ý, chỉ chỉnh tự nhiên' : 'Chế độ: viết lại sáng tạo + bản địa hoá';
+        $('lzStyleMode').textContent = o && o.dataset.mode === 'localize' ? 'Chế độ: giữ sát ý gốc, chỉ chỉnh cho tự nhiên' : 'Chế độ: sáng tạo + bản địa hoá';
     }
     $('lzStyle').addEventListener('change', updateStyleMode);
 

@@ -100,7 +100,7 @@
                     <!-- Chunk Size -->
                     <div class="form-group">
                         <label for="chunkSize" style="display: flex; justify-content: space-between; align-items: center;">
-                            <span>Dung lượng cắt mỗi lần dịch (Chế độ thông minh):</span>
+                            <span>Dung lượng mỗi lần xử lý (Chế độ thông minh):</span>
                             <span style="font-size: 11px; color: #9ca3af; font-weight: normal;">Khuyên dùng Auto</span>
                         </label>
                         <select id="chunkSize" name="chunkSize" class="glass-input">
@@ -140,7 +140,7 @@
                             <i class="fa-solid fa-align-left icon-text"></i> Dán văn bản trực tiếp 
                             <span id="charCount" class="char-count">0 / 100,000 ký tự</span>
                         </label>
-                        <textarea id="rawText" name="rawText" class="glass-input" rows="6" maxlength="100000" placeholder="Dán văn bản cần dịch vào đây..."></textarea>
+                        <textarea id="rawText" name="rawText" class="glass-input" rows="6" maxlength="100000" placeholder="Dán nội dung gốc vào đây..."></textarea>
                     </div>
 
                     <!-- Custom Filename -->
@@ -260,7 +260,7 @@
                     <!-- Chunk Size -->
                     <div class="form-group">
                         <label for="batchChunkSize" style="display: flex; justify-content: space-between; align-items: center;">
-                            <span>Dung lượng cắt mỗi lần dịch (Chế độ thông minh):</span>
+                            <span>Dung lượng mỗi lần xử lý (Chế độ thông minh):</span>
                             <span style="font-size: 11px; color: #9ca3af; font-weight: normal;">Khuyên dùng Auto</span>
                         </label>
                         <select id="batchChunkSize" name="batchChunkSize" class="glass-input">
@@ -306,7 +306,7 @@
                         <i class="fa-solid fa-circle-check"></i> Đã xử lý thành công toàn bộ!
                     </div>
                     
-                    <p style="color: var(--text-muted); margin-bottom: 20px;">Tất cả các file đã được dịch và đóng gói thành file ZIP.</p>
+                    <p style="color: var(--text-muted); margin-bottom: 20px;">Tất cả các file đã được sáng tạo và đóng gói thành file ZIP.</p>
                     
                     <div class="action-bar">
                         <a id="batchDownloadBtn" href="#" class="btn-primary" download>
@@ -475,7 +475,7 @@
         <div id="tab-localize" class="workspace tab-content" style="display: none;">
             <div class="card input-section">
                 <h2><i class="fa-solid fa-earth-asia"></i> Tái Sáng Tạo Đa Quốc Gia</h2>
-                <p class="lz-hint">Dán hoặc tải bài có sẵn, chọn kiểu viết lại và các quốc gia đích. Tool viết thẳng bằng ngôn ngữ bản địa của từng nước (không dịch từng chữ) trên model Gemini đã chọn, mỗi nước một file.</p>
+                <p class="lz-hint">Dán hoặc tải bài có sẵn, chọn phong cách sáng tạo và các quốc gia đích. Tool sáng tạo thẳng bằng ngôn ngữ bản địa của từng nước (không dịch từng chữ) trên model Gemini đã chọn, mỗi nước một file.</p>
 
                 <form id="lzForm">
                     <div class="form-group">
@@ -743,7 +743,7 @@
                 <h2><i class="fa-solid fa-list-check"></i> Kho Mẫu Lệnh (Prompts)</h2>
                 
                 <div class="tabs" style="margin-top: 15px; margin-bottom: 10px; display: flex; gap: 10px;">
-                    <button class="btn-primary prompt-sub-tab active" data-target="list-translate" style="flex: 1; border-radius: 8px; padding: 8px;"><i class="fa-solid fa-language"></i> Dịch Thuật</button>
+                    <button class="btn-primary prompt-sub-tab active" data-target="list-translate" style="flex: 1; border-radius: 8px; padding: 8px;"><i class="fa-solid fa-language"></i> Sáng Tạo Ngữ</button>
                     <button class="btn-primary prompt-sub-tab" data-target="list-creative" style="flex: 1; border-radius: 8px; padding: 8px; background: rgba(255,255,255,0.05); color: var(--text-muted);"><i class="fa-solid fa-wand-magic-sparkles"></i> Sáng Tạo</button>
                     <button class="btn-primary prompt-sub-tab" data-target="list-rewrite" style="flex: 1; border-radius: 8px; padding: 8px; background: rgba(255,255,255,0.05); color: var(--text-muted);"><i class="fa-solid fa-earth-asia"></i> Tái Sáng Tạo</button>
                 </div>
@@ -757,7 +757,7 @@
                 </div>
 
                 <div id="list-rewrite" class="prompt-sub-content" style="display: none; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; padding-right: 5px;">
-                    <div style="text-align: center; color: var(--text-muted);">Chưa có mẫu viết lại nào.</div>
+                    <div style="text-align: center; color: var(--text-muted);">Chưa có mẫu phong cách nào.</div>
                 </div>
             </div>
             
@@ -767,23 +767,23 @@
                 <form id="promptForm" style="margin-top: 20px;">
                     <div class="form-group">
                         <label><i class="fa-solid fa-tag"></i> Tên Mẫu Lệnh:</label>
-                        <input type="text" id="promptName" class="glass-input" required placeholder="VD: Dịch Thuật Chuyên Ngành Y Tế">
+                        <input type="text" id="promptName" class="glass-input" required placeholder="VD: Sáng Tạo Ngữ Chuyên Ngành Y Tế">
                     </div>
                     <div class="form-group">
                         <label><i class="fa-solid fa-layer-group"></i> Phân Loại:</label>
                         <select id="promptType" class="glass-input">
-                            <option value="translate">Dành cho Dịch Thuật (Đơn & Hàng Loạt)</option>
+                            <option value="translate">Dành cho Sáng Tạo Ngữ (Đơn & Hàng Loạt)</option>
                             <option value="creative">Dành cho Sáng Tạo</option>
                             <option value="rewrite">Dành cho Tái Sáng Tạo Đa Quốc Gia</option>
                         </select>
                     </div>
                     <div class="form-group" id="promptModeGroup" style="display: none;">
-                        <label><i class="fa-solid fa-sliders"></i> Chế độ của mẫu viết lại:</label>
+                        <label><i class="fa-solid fa-sliders"></i> Chế độ của mẫu phong cách:</label>
                         <select id="promptMode" class="glass-input">
-                            <option value="rewrite">Viết lại sáng tạo + bản địa hoá</option>
-                            <option value="localize">Chỉ dịch sát ý + chỉnh cho tự nhiên (không sáng tạo thêm)</option>
+                            <option value="rewrite">Sáng tạo + bản địa hoá</option>
+                            <option value="localize">Giữ sát ý gốc + chỉnh cho tự nhiên (không sáng tạo thêm)</option>
                         </select>
-                        <small class="lz-muted">Mẫu viết lại là "hướng dẫn phong cách". Có thể dùng [COUNTRY], [LANGUAGE], [AUDIENCE] — Tool tự thay theo từng quốc gia. Không cần [TEXT].</small>
+                        <small class="lz-muted">Mẫu phong cách là "hướng dẫn phong cách". Có thể dùng [COUNTRY], [LANGUAGE], [AUDIENCE] — Tool tự thay theo từng quốc gia. Không cần [TEXT].</small>
                     </div>
                     <div class="form-group">
                         <label><i class="fa-solid fa-globe"></i> Ngôn ngữ áp dụng:</label>

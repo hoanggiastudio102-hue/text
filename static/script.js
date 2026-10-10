@@ -1003,7 +1003,7 @@ promptContent: promptContent,
                     
                     let isBatch = file.name.endsWith('.zip');
                     let badgeClass = isBatch ? 'dich-loat' : 'dich-don';
-                    let badgeText = isBatch ? 'Sáng Tạo Ngữ Hàng Loạt' : 'Dịch Đơn';
+                    let badgeText = isBatch ? 'Sáng Tạo Ngữ Hàng Loạt' : 'Sáng Tạo Ngữ Đơn';
                     let iconColor = isBatch ? '#f59e0b' : '#3b82f6';
                     let iconClass = isBatch ? 'fa-file-zipper' : 'fa-file-lines';
                     

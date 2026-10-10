@@ -80,7 +80,7 @@ Nội dung cần dịch:
 
 def get_prompts():
     if not os.path.exists(PROMPTS_FILE):
-        return [{"id": "default", "name": "Mặc định (Dịch Chuẩn)", "content": DEFAULT_PROMPT}]
+        return [{"id": "default", "name": "Mặc định (Sáng Tạo Chuẩn)", "content": DEFAULT_PROMPT}]
     with open(PROMPTS_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -784,7 +784,7 @@ def _active_job_id():
 def _launch_job(job_id):
     job_dir = os.path.join(JOBS_DIR, job_id)
     with open("bot_status.log", "w", encoding="utf-8") as f:
-        f.write("⏳ Đang khởi động tiến trình Viết lại & Bản địa hoá...\n")
+        f.write("⏳ Đang khởi động tiến trình Sáng tạo & Bản địa hoá...\n")
     log_file = open("bot_status.log", "a", encoding="utf-8")
     proc = subprocess.Popen([sys.executable, os.path.join(APP_DIR, "localize_bot.py"), "--job-dir", job_dir],
                             cwd=APP_DIR, stdout=log_file, stderr=subprocess.STDOUT)
