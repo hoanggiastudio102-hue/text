@@ -67,13 +67,15 @@ ACCOUNT_FILE = os.path.join(BASE_DIR, "gemini_account.json")
 
 _JS_ACCOUNT = r"""
 () => {
-  const els = Array.from(document.querySelectorAll('a[aria-label], button[aria-label]'));
+  const mail = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/;
+  const els = Array.from(document.querySelectorAll('[aria-label], [title], img[alt]'));
   for (const e of els) {
-    const l = e.getAttribute('aria-label') || '';
-    if (/google account|tài khoản google/i.test(l)) return l;
+    const l = e.getAttribute('aria-label') || e.getAttribute('title') || e.getAttribute('alt') || '';
+    if (/google account|tài khoản google/i.test(l) || mail.test(l)) return l;
   }
-  const g = document.querySelector('.greeting, [class*="greeting"], h1');
-  return g ? ('Lời chào: ' + (g.innerText || '').trim()) : null;
+  const t = (document.body.innerText || '');
+  const m = t.match(/(?:Chào|Xin chào|Hello|Hi)\s+([^\n,!.]{1,40})/);
+  return m ? ('Lời chào: ' + m[0]) : null;
 }
 """
 
@@ -91,6 +93,8 @@ def parse_account(label):
         m2 = re.search(r"[:：]\s*(.+?)\s*(?:\(|$)", label)
         if m2:
             name = m2.group(1).strip()
+    if re.match(r"(conversation|cuộc trò chuyện|gemini)", name, flags=re.I):
+        name = ""
     return name, email
 
 
@@ -302,6 +306,9 @@ class GeminiSession:
         """Đọc tên/email tài khoản Google đang đăng nhập và lưu để Tool hiển thị. Lỗi thì bỏ qua."""
         try:
             label = self.page.evaluate(_JS_ACCOUNT)
+            if not label:
+                self.page.wait_for_timeout(3000)
+                label = self.page.evaluate(_JS_ACCOUNT)
             info = save_account(self.profile_name, label)
             if info:
                 self.log(f"Tài khoản Gemini: {info.get('name') or ''} {info.get('email') or ''}".strip())
