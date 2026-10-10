@@ -310,6 +310,17 @@ class GeminiSession:
                 self.page.wait_for_timeout(3000)
                 label = self.page.evaluate(_JS_ACCOUNT)
             info = save_account(self.profile_name, label)
+            if not info:
+                try:
+                    dbg = self.page.evaluate("""() => ({url: location.href, title: document.title,
+                      labels: Array.from(document.querySelectorAll('[aria-label],[title]')).slice(0, 80).map(e => (e.getAttribute('aria-label') || e.getAttribute('title'))),
+                      text: (document.body.innerText || '').slice(0, 600)})""")
+                    dbg["label"] = label
+                    with open(os.path.join(BASE_DIR, "account_debug.json"), "w", encoding="utf-8") as f:
+                        json.dump(dbg, f, ensure_ascii=False, indent=1)
+                    self.page.screenshot(path=os.path.join(BASE_DIR, "account_debug.png"))
+                except Exception:
+                    pass
             if info:
                 self.log(f"Tài khoản Gemini: {info.get('name') or ''} {info.get('email') or ''}".strip())
         except Exception:
