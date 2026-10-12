@@ -1207,7 +1207,9 @@ def api_nb_run():
         "id": job_id, "created_at": time.time(), "state": "queued", "error": "", "engine": "notebook",
         "nb": {"folder": folder["name"], "type": typ["name"], "folder_id": folder["id"], "type_id": typ["id"],
                "fixed_sources": notebook_store.split_fixed(typ.get("fixed_text")),
-               "chat_rules": typ.get("chat_rules", ""), "longer": bool(typ.get("longer", True))},
+               "chat_rules": typ.get("chat_rules", ""), "longer": bool(typ.get("longer", True)),
+               "review_level": form.get("reviewLevel") if form.get("reviewLevel") in ("off", "fast", "deep")
+                               else (typ.get("review_level") or "deep")},
         "base_name": _safe_name(form.get("customFilename"), meta_articles[0]["name"]) if len(meta_articles) == 1
                      else _safe_name(form.get("customFilename"), "BaiViet"),
         "articles": meta_articles, "countries": countries, "results": {},

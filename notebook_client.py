@@ -97,6 +97,25 @@ def clean_answer(text):
     return re.sub(r"\n{3,}", "\n\n", out).strip()
 
 
+class _GeminiTab:
+    """Bọc GeminiSession chạy trên tab mới của NotebookSession."""
+
+    def __init__(self, nb):
+        from gemini_client import GeminiSession
+        g = GeminiSession(profile_name=nb.profile_name, log=nb.log, on_tick=nb.on_tick, should_cancel=nb.should_cancel)
+        g.ctx = nb.ctx
+        g.page = nb.ctx.new_page()
+        self.g = g
+
+    def new_chat(self):
+        self.g.page.bring_to_front()
+        self.g.new_chat()
+
+    def ask(self, prompt):
+        self.g.page.bring_to_front()
+        return self.g.ask(prompt)
+
+
 class NotebookSession:
     model = "NotebookLM"
 
@@ -117,6 +136,7 @@ class NotebookSession:
         self.url = ""
         self.custom_ok = False
         self.article_id = None
+        self._gem = None
 
     # --- vòng đời ------------------------------------------------------------------------------
     def start(self):
@@ -137,6 +157,12 @@ class NotebookSession:
         self.page = self.ctx.pages[0] if self.ctx.pages else self.ctx.new_page()
         self._open_home()
         self._record_account()
+
+    def gemini(self):
+        """Gemini trong một TAB MỚI của cùng trình duyệt (cùng hồ sơ, không mở Chrome thứ hai) để soát chéo."""
+        if self._gem is None:
+            self._gem = _GeminiTab(self)
+        return self._gem
 
     def close(self):
         try:
@@ -420,6 +446,10 @@ class NotebookSession:
     def ask(self, prompt, timeout=1500, first_token_timeout=240):
         self._check_cancel()
         page = self.page
+        try:
+            page.bring_to_front()
+        except Exception:
+            pass
         if self._need_new:
             self._create_notebook()
         box = page.locator(QUERY_BOX).first

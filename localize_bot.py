@@ -28,6 +28,7 @@ except Exception:
     pass
 
 import locales
+import review_check
 from gemini_client import (GeminiSession, DryRunSession, GeminiError, GeminiLimitError,
                            GeminiCancelled)
 
@@ -327,12 +328,12 @@ def nb_proofread(job, session, text, code):
     i, j = ans.find("["), ans.rfind("]")
     if i == -1 or j <= i:
         job.log("   (soát lỗi: không đọc được danh sách lỗi)")
-        return text
+        return text, 0
     try:
         items = json.loads(ans[i:j + 1])
     except ValueError:
         job.log("   (soát lỗi: danh sách lỗi sai định dạng)")
-        return text
+        return text, 0
     fixed = 0
     for it in items if isinstance(items, list) else []:
         if not isinstance(it, dict):
@@ -344,8 +345,8 @@ def nb_proofread(job, session, text, code):
     job.log(f"   🔍 soát lỗi: sửa {fixed}/{len(items) if isinstance(items, list) else 0} chỗ")
     rest = find_leaks(text, code)
     if rest:
-        job.log(f"   ⚠️ còn chữ lạ chưa sửa được: {', '.join(rest[:8])} — sếp xem lại.")
-    return text
+        job.log(f"   ⚠️ còn chữ lạ chưa sửa được: {', '.join(rest[:8])} — sẽ gửi Gemini soát chéo.")
+    return text, fixed
 
 
 def process_unit_nb(job, session, article, code):
@@ -407,12 +408,28 @@ def process_unit_nb(job, session, article, code):
             job.log(f"   ⚠️ bản ra vẫn ngắn ({have:,}/{want:,} {unit}) — sếp kiểm tra lại bản này.")
 
     text = re.sub(r"\n?\s*\bHẾT\W*$", "", text.strip()).strip()
-    try:
-        text = nb_proofread(job, session, text, code)
-    except (GeminiLimitError, GeminiCancelled):
-        raise
-    except Exception as e:
-        job.log(f"   (bỏ qua bước soát lỗi: {str(e)[:120]})")
+    level = (cfg.get("nb") or {}).get("review_level") or "deep"
+    proof, changes, flags = 0, [], {}
+    if level != "off":
+        try:                                   # lớp 2: NotebookLM tự soát (sai -> đúng)
+            text, proof = nb_proofread(job, session, text, code)
+        except (GeminiLimitError, GeminiCancelled):
+            raise
+        except Exception as e:
+            job.log(f"   (bỏ qua bước NotebookLM tự soát: {str(e)[:120]})")
+    if level == "deep":                        # lớp 1 + 3: máy đánh dấu + Gemini soát chéo theo lô
+        try:
+            gem = session.gemini() if hasattr(session, "gemini") else None
+            text, changes, flags = review_check.cross_check(
+                gem, src, text, code, country["language"], cfg.get("audience", ""), log=job.log,
+                should_stop=job.cancelled)
+            job.log(f"   ✔ Gemini soát chéo: sửa {len(changes)} đoạn")
+        except (GeminiLimitError, GeminiCancelled):
+            raise
+        except Exception as e:
+            job.log(f"   (bỏ qua bước Gemini soát chéo: {str(e)[:120]})")
+    elif level == "fast":
+        flags = review_check.machine_flags(review_check.paragraphs(src), review_check.paragraphs(text), code)
     final = restore_breaks(src, text)
     fname = f"{article['name']}_{code}.txt"
     art_dir = os.path.join(job.files_dir, article["id"])
@@ -421,6 +438,14 @@ def process_unit_nb(job, session, article, code):
         f.write(final + "\n")
     res.update(status="done", file=f"{article['id']}/{fname}", chars=len(final), chunks_done=res.get("chunks_total", 1),
                finished_at=time.time())
+    if level != "off":
+        rep, n_left = review_check.report(article["name"], country["name_vi"], changes, flags,
+                                          review_check.paragraphs(final), code, proof)
+        rname = f"{article['name']}_{code}_ra_soat.txt"
+        with open(os.path.join(art_dir, rname), "w", encoding="utf-8") as f:
+            f.write(rep)
+        res["report"] = f"{article['id']}/{rname}"
+        job.log(f"   📋 Báo cáo rà soát: {rname}" + (f" — còn {n_left} đoạn nghi ngờ" if n_left else " — sạch"))
     job.save()
     job.log(f"✅ Xong [{article['name']}] {country['name_vi']}: {len(final):,} ký tự (gốc {len(src):,}) -> {fname}")
 
@@ -453,6 +478,15 @@ class DryNotebook(DryRunSession):
             return "[]"
         return f"[CHẠY THỬ NotebookLM] {prompt[:200]}"
 
+    def gemini(self):
+        class _G:
+            def new_chat(self):
+                pass
+
+            def ask(self, p):
+                return "[]"
+        return _G()
+
 
 # ---------------------------------------------------------------------------
 # ĐÓNG GÓI
@@ -465,7 +499,7 @@ def finalize(job):
     cfg["history_files"] = []
     if done:
         os.makedirs(OUTPUT_FOLDER, exist_ok=True)
-        if len(done) == 1:
+        if len(done) == 1 and not done[0][1].get("report"):
             k, r = done[0]
             name = os.path.basename(r["file"])
             shutil.copyfile(os.path.join(job.files_dir, r["file"]), os.path.join(OUTPUT_FOLDER, name))
@@ -479,6 +513,10 @@ def finalize(job):
                     arcname = (f"{arts[aid]['name']}/{os.path.basename(r['file'])}" if multi
                                else os.path.basename(r["file"]))
                     z.write(os.path.join(job.files_dir, r["file"]), arcname)
+                    rep = r.get("report")
+                    if rep and os.path.exists(os.path.join(job.files_dir, rep)):
+                        z.write(os.path.join(job.files_dir, rep),
+                                (f"{arts[aid]['name']}/" if multi else "") + "ra_soat/" + os.path.basename(rep))
             cfg["zip"] = zip_name
             cfg["history_files"] = [zip_name]
         try:  # thời gian xử lý hiện trong tab Lịch Sử

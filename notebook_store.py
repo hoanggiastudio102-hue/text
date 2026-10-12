@@ -13,7 +13,7 @@ _LOCK = threading.Lock()
 
 TYPE_FIELDS = {"name": "", "prompt": "", "mode": "rewrite", "length": "same", "review": False, "chunk_size": 8000,
                "fixed_text": "", "audience": "", "keywords": "", "glossary": "", "extra": "",
-               "chat_rules": "", "longer": True}
+               "chat_rules": "", "longer": True, "review_level": "deep"}
 MODES = ("rewrite", "localize", "analyze")
 LENGTHS = ("same", "longer", "shorter")
 
@@ -59,6 +59,7 @@ def _clean_type(src, old=None):
     t["length"] = t["length"] if t["length"] in LENGTHS else "same"
     t["review"] = bool(t["review"])
     t["longer"] = bool(t["longer"])
+    t["review_level"] = t["review_level"] if t["review_level"] in ("off", "fast", "deep") else "deep"
     try:
         t["chunk_size"] = max(2000, min(40000, int(t["chunk_size"])))
     except (TypeError, ValueError):

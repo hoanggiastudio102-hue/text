@@ -61,9 +61,13 @@
     function updateTypeInfo() {
         const t = curType();
         if (!t) { $('nbTypeInfo').textContent = ''; return; }
+        const lv = t.review_level || 'deep';
+        $('nbRv1').checked = lv !== 'off';
+        $('nbRv2').checked = lv === 'deep';
         const nsrc = (t.fixed_text || '').split(/^\s*={5,}\s*$/m).filter((x) => x.trim()).length;
         const md = t.mode === 'localize' ? 'giữ sát ý gốc' : t.mode === 'analyze' ? 'phân tích' : 'sáng tạo';
-        $('nbTypeInfo').textContent = `${md} · ${nsrc} nguồn cố định${t.longer !== false ? ' · Dài hơn' : ''}`;
+        const rv = { deep: 'rà soát Kỹ', fast: 'rà soát Nhanh', off: 'không rà soát' }[t.review_level || 'deep'];
+        $('nbTypeInfo').textContent = `${md} · ${nsrc} nguồn cố định${t.longer !== false ? ' · Dài hơn' : ''} · ${rv}`;
     }
     $('nbFolder').addEventListener('change', () => renderTypes());
     $('nbType').addEventListener('change', updateTypeInfo);
@@ -99,6 +103,7 @@
         $('nbTPrompt').value = t ? t.prompt : defaultPrompt;
         $('nbTRules').value = t ? (t.chat_rules || '') : '';
         $('nbTLonger').checked = t ? t.longer !== false : true;
+        $('nbTReviewLevel').value = (t && t.review_level) || 'deep';
         $('nbTFixed').value = t ? t.fixed_text : '';
         $('nbTLength').value = t ? t.length : 'same';
         $('nbTAudience').value = t ? t.audience : '';
@@ -122,7 +127,7 @@
         if (!f) return;
         const d = await jpost('/api/nb/type', {
             folder_id: f.id, id: editTypeId, name: $('nbTName').value, mode: $('nbTMode').value, prompt: $('nbTPrompt').value,
-            fixed_text: $('nbTFixed').value, length: $('nbTLength').value, chat_rules: $('nbTRules').value, longer: $('nbTLonger').checked,
+            fixed_text: $('nbTFixed').value, length: $('nbTLength').value, chat_rules: $('nbTRules').value, longer: $('nbTLonger').checked, review_level: $('nbTReviewLevel').value,
             audience: $('nbTAudience').value, keywords: $('nbTKeywords').value, glossary: $('nbTGlossary').value,
             extra: $('nbTExtra').value,
         });
@@ -165,6 +170,8 @@
         renderCountries();
     });
     $('nbSelNone').addEventListener('click', () => { selected.clear(); renderCountries(); });
+    $('nbRv2').addEventListener('change', () => { if ($('nbRv2').checked) $('nbRv1').checked = true; });
+    $('nbRv1').addEventListener('change', () => { if (!$('nbRv1').checked) $('nbRv2').checked = false; });
     $('nbRaw').addEventListener('input', () => { $('nbCount').textContent = `${$('nbRaw').value.length.toLocaleString('vi-VN')} ký tự`; });
 
     // ---------- chạy ----------
@@ -182,6 +189,7 @@
         fd.append('customFilename', $('nbName').value);
         fd.append('perLine', $('nbPerLine').checked ? '1' : '');
         fd.append('dryRun', $('nbDry').checked ? '1' : '');
+        fd.append('reviewLevel', !$('nbRv1').checked ? 'off' : ($('nbRv2').checked ? 'deep' : 'fast'));
         fd.append('profileName', profileName());
         files.forEach((f) => fd.append('files[]', f));
         const btn = $('nbStart');
