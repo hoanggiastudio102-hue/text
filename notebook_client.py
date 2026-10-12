@@ -83,6 +83,9 @@ _JS_CLOSE_INTRO ="""() => {
 def clean_answer(text):
     """Bỏ lời dẫn đầu ("Dưới đây là...:") và câu gợi ý cuối ("💡 Bạn có muốn...") mà NotebookLM hay thêm."""
     t = (text or "").replace("\r\n", "\n").strip()
+    # nhãn nút "Thoughts / expand_more" của khung suy nghĩ bị dính vào đầu câu trả lời
+    t = re.sub(r"^\s*(?:(?:Thoughts|Thinking|Suy nghĩ|Show thinking|Hiện suy nghĩ|expand_more|expand_less|"
+               r"chevron_right|keyboard_arrow_down)\s*(?:\n|$))+", "", t, flags=re.I).strip()
     paras = [p for p in re.split(r"\n{2,}", t)]
     if len(paras) > 1 and re.match(r"^\s*(dưới đây|đây là|sau đây|here is|here's|below is)\b", paras[0], re.I) \
             and paras[0].rstrip().endswith(":") and len(paras[0]) < 300:

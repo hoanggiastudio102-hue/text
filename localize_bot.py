@@ -271,6 +271,83 @@ def merge_continuation(prev, new):
     return (prev.rstrip() + "\n\n" + new).strip() if new else prev
 
 
+def restore_breaks(src, out):
+    """Giữ đúng bố cục bài gốc: nếu số đoạn khớp, chèn lại các dòng trống ngăn phần như bản gốc."""
+    gaps, gap = [], 0
+    for line in (src or "").replace("\r\n", "\n").split("\n"):
+        if line.strip():
+            gaps.append(gap)
+            gap = 0
+        else:
+            gap += 1
+    paras = [p.strip() for p in out.replace("\r\n", "\n").split("\n") if p.strip()]
+    if not paras or len(paras) != len(gaps):
+        return out.strip()
+    s = paras[0]
+    for g, p in zip(gaps[1:], paras[1:]):
+        s += "\n" * (g + 1) + p
+    return s
+
+
+
+
+def find_leaks(text, code):
+    """Chữ của ngôn ngữ khác lẫn vào bản dịch (VD: 'dã蠻', 'conveyed' trong bản Trung, '帝국의')."""
+    pats = []
+    if code not in ("KR", "SAME"):
+        pats.append(r"[\uac00-\ud7a3\u1100-\u11ff]+")
+    if code not in ("CN", "TW", "HK", "JP", "KR", "SAME"):
+        pats.append(r"[\u3040-\u30ff\u3400-\u9fff]+")
+    if code in ("CN", "TW", "HK", "JP"):
+        pats.append(r"(?<![A-Za-z])[a-z][A-Za-z]{2,}(?![A-Za-z])")   # từ tiếng Anh viết thường (bỏ qua AI, USB...)
+    leaks = []
+    for pat in pats:
+        for m in re.finditer(pat, text):
+            snip = text[max(0, m.start() - 4):m.end() + 4].replace("\n", " ").strip()
+            if snip not in leaks:
+                leaks.append(snip)
+    return leaks[:30]
+
+
+def nb_proofread(job, session, text, code):
+    """Hỏi NotebookLM liệt kê lỗi dạng 'sai -> đúng' (không bắt viết lại toàn văn, nên không bị cụt), rồi Tool tự thay."""
+    country = locales.get_country(code)
+    lang = VI_LANG.get(code, country["language"])
+    leaks = find_leaks(text, code)
+    if leaks:
+        job.log(f"   ⚠️ nghi lẫn chữ ngôn ngữ khác: {', '.join(leaks[:8])}")
+    prompt = (
+        f"Soát lỗi bản {lang} bạn vừa viết, đối chiếu với nguồn gốc. Chỉ liệt kê LỖI THẬT: sai chính tả, gõ nhầm, từ dùng sai "
+        f"nghĩa hoặc không tự nhiên với người bản xứ, chữ/từ của ngôn ngữ khác lẫn vào, câu thêm ý không có trong gốc, "
+        f"sai nghĩa so với gốc.\n"
+        + (f"Bắt buộc sửa các chỗ lẫn chữ này: {', '.join(leaks)}\n" if leaks else "")
+        + "Trả về DUY NHẤT một mảng JSON, mỗi phần tử dạng {\"sai\": \"đoạn NGUYÊN VĂN đang có trong bản viết (3-15 từ)\", "
+        "\"dung\": \"đoạn thay thế\"}. Không có lỗi thì trả về []. Không giải thích.")
+    ans = session.ask(prompt)
+    i, j = ans.find("["), ans.rfind("]")
+    if i == -1 or j <= i:
+        job.log("   (soát lỗi: không đọc được danh sách lỗi)")
+        return text
+    try:
+        items = json.loads(ans[i:j + 1])
+    except ValueError:
+        job.log("   (soát lỗi: danh sách lỗi sai định dạng)")
+        return text
+    fixed = 0
+    for it in items if isinstance(items, list) else []:
+        if not isinstance(it, dict):
+            continue
+        bad, good = str(it.get("sai") or ""), str(it.get("dung") or "")
+        if bad and good and bad != good and len(bad) <= 300 and bad in text:
+            text = text.replace(bad, good, 1)
+            fixed += 1
+    job.log(f"   🔍 soát lỗi: sửa {fixed}/{len(items) if isinstance(items, list) else 0} chỗ")
+    rest = find_leaks(text, code)
+    if rest:
+        job.log(f"   ⚠️ còn chữ lạ chưa sửa được: {', '.join(rest[:8])} — sếp xem lại.")
+    return text
+
+
 def process_unit_nb(job, session, article, code):
     cfg = job.data
     country = locales.get_country(code)
@@ -329,7 +406,14 @@ def process_unit_nb(job, session, article, code):
         if have < 0.8 * want:
             job.log(f"   ⚠️ bản ra vẫn ngắn ({have:,}/{want:,} {unit}) — sếp kiểm tra lại bản này.")
 
-    final = re.sub(r"\n?\s*\bHẾT\W*$", "", text.strip()).strip()
+    text = re.sub(r"\n?\s*\bHẾT\W*$", "", text.strip()).strip()
+    try:
+        text = nb_proofread(job, session, text, code)
+    except (GeminiLimitError, GeminiCancelled):
+        raise
+    except Exception as e:
+        job.log(f"   (bỏ qua bước soát lỗi: {str(e)[:120]})")
+    final = restore_breaks(src, text)
     fname = f"{article['name']}_{code}.txt"
     art_dir = os.path.join(job.files_dir, article["id"])
     os.makedirs(art_dir, exist_ok=True)
@@ -365,6 +449,8 @@ class DryNotebook(DryRunSession):
     def ask(self, prompt, **k):
         if prompt.startswith("Tiếp tục"):
             return "HẾT"
+        if prompt.startswith("Soát lỗi"):
+            return "[]"
         return f"[CHẠY THỬ NotebookLM] {prompt[:200]}"
 
 
