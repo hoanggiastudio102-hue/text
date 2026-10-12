@@ -28,7 +28,18 @@ RX_ADD = re.compile(r"Thêm nguồn|Add source", re.I)
 RX_PASTE = re.compile(r"Văn bản đã sao chép|Copied text|Paste text", re.I)
 RX_INSERT = re.compile(r"^\s*(Chèn|Insert)\s*$", re.I)
 RX_PASTE_BOX = re.compile(r"Dán văn bản|Paste (your )?text", re.I)
+RX_UPLOAD = re.compile(r"Tải tệp lên|Upload files?", re.I)
+RX_NB_MENU = re.compile(r"Cấu hình sổ ghi chú|Notebook (settings|configuration)|Configure notebook|More options", re.I)
+RX_CHAT_CFG = re.compile(r"Định cấu hình cuộc trò chuyện|Configure chat", re.I)
 QUERY_BOX = '[aria-label="Hộp truy vấn"], [aria-label="Query box"]'
+
+# Quy tắc chung đặt vào "Định cấu hình cuộc trò chuyện > Tuỳ chỉnh" của mỗi sổ (giới hạn 10.000 ký tự).
+BASE_CHAT_RULES = (
+    "Bạn là biên dịch viên kiêm biên tập viên bản ngữ chuyên nghiệp. Khi được yêu cầu chuyển ngữ hoặc viết lại "
+    "một nguồn: chỉ trả về đúng văn bản kết quả; không lời dẫn, không tóm tắt, không ghi chú, không số trích dẫn "
+    "nguồn, không câu hỏi hay gợi ý ở cuối. Giữ nguyên bố cục, tiêu đề, xuống dòng, gạch đầu dòng như bản gốc. "
+    "Tuyệt đối không rút gọn, không bỏ đoạn. Nếu một lần trả lời không đủ chỗ thì dừng ở cuối một đoạn trọn vẹn; "
+    "khi được nhắn 'Tiếp tục' thì viết tiếp đúng từ chỗ dừng, không lặp lại phần đã viết.")
 ANSWER_SEL = ".to-user-message-inner-content"
 
 # Gắn vào đầu mọi câu hỏi để NotebookLM trả về đúng bản viết, không kèm lời dẫn/gợi ý.
@@ -48,7 +59,17 @@ _JS_TEXT = """el => {
   return t;
 }"""
 
-_JS_CLOSE_INTRO = """() => {
+_JS_SOURCE_COUNT = r"""() => {
+  let n = -1;
+  for (const e of document.querySelectorAll('span, div, button')) {
+    if (e.children.length) continue;
+    const m = /^\s*(\d+)\s*(nguồn|sources?)\s*$/i.exec(e.innerText || '');
+    if (m) n = Math.max(n, +m[1]);
+  }
+  return n;
+}"""
+
+_JS_CLOSE_INTRO ="""() => {
   const d = Array.from(document.querySelectorAll('[role=dialog], mat-dialog-container, .mat-mdc-dialog-container'))
     .find(x => /Hạn mức|hạn mức|Gemini Notebook linh hoạt|usage limits/i.test(x.innerText || ''));
   if (!d) return false;
@@ -91,6 +112,8 @@ class NotebookSession:
         self._need_new = True
         self._cmd = 0
         self.url = ""
+        self.custom_ok = False
+        self.article_id = None
 
     # --- vòng đời ------------------------------------------------------------------------------
     def start(self):
@@ -172,6 +195,7 @@ class NotebookSession:
         """Đánh dấu: lần hỏi kế tiếp sẽ mở một sổ ghi chú MỚI (không xoá/không dùng lại sổ cũ)."""
         self._check_cancel()
         self._need_new = True
+        self.article_id = None
 
     def _dismiss_intro(self):
         for _ in range(3):
@@ -182,7 +206,7 @@ class NotebookSession:
                 return
             time.sleep(0.8)
 
-    def _create_notebook(self):
+    def _create_notebook(self, add_fixed=True):
         page = self.page
         self._open_home()
         page.get_by_role("button", name=RX_NEW).first.click()
@@ -195,6 +219,9 @@ class NotebookSession:
         time.sleep(2)
         self._dismiss_intro()
         self.log(f"   📓 Sổ mới: {self.url.split('?')[0]}" + (f" — {self.label}" if self.label else ""))
+        self.custom_ok = False
+        if not add_fixed:
+            return
         for i, src in enumerate(self.fixed_sources, start=1):
             self._add_source(src)
             self.log(f"   + nguồn cố định {i}/{len(self.fixed_sources)} ({len(src):,} ký tự)")
@@ -236,6 +263,127 @@ class NotebookSession:
         self._dismiss_intro()
         self.on_tick()
 
+    # --- luồng "như sếp làm tay": 1 bài = 1 sổ, bài gốc tải lên dạng tệp -------------------------------
+    def _visible(self, loc):
+        try:
+            return loc.is_visible()
+        except Exception:
+            return False
+
+    def _source_count(self):
+        try:
+            return int(self.page.evaluate(_JS_SOURCE_COUNT))
+        except Exception:
+            return -1
+
+    def _wait_sources(self, n, timeout=180):
+        t0 = time.time()
+        while time.time() - t0 < timeout:
+            self._check_cancel()
+            self.on_tick()
+            if self._source_count() >= n:
+                time.sleep(3)
+                return True
+            time.sleep(2)
+        return False
+
+    def _upload_file(self, path):
+        """Thêm nguồn > Tải tệp lên > chọn file (đúng như sếp làm tay)."""
+        page = self.page
+        before = max(0, self._source_count())
+        up = page.get_by_role("button", name=RX_UPLOAD).first
+        if not self._visible(up):
+            up = page.get_by_text(RX_UPLOAD).first
+        if not self._visible(up):
+            page.get_by_role("button", name=RX_ADD).first.click()
+            time.sleep(1.2)
+            up = page.get_by_role("button", name=RX_UPLOAD).first
+            if not self._visible(up):
+                up = page.get_by_text(RX_UPLOAD).first
+        with page.expect_file_chooser(timeout=15000) as fc:
+            up.click()
+        fc.value.set_files(path)
+        if not self._wait_sources(before + 1):
+            self._debug("tệp tải lên chưa thành nguồn")
+            raise GeminiError("NotebookLM chưa nhận tệp bài gốc (quá thời gian chờ).")
+        self._dismiss_intro()
+
+    def configure_chat(self, rules="", longer=True):
+        """⋮ > Định cấu hình cuộc trò chuyện: Tuỳ chỉnh (≤10.000 ký tự) + độ dài 'Dài hơn'. Lỗi thì bỏ qua."""
+        page = self.page
+        try:
+            opened = False
+            for _ in range(3):
+                page.get_by_role("button", name=RX_NB_MENU).first.click()
+                item = page.get_by_text(RX_CHAT_CFG).first
+                try:
+                    item.wait_for(timeout=4000)
+                    item.click()
+                    opened = True
+                    break
+                except Exception:
+                    page.keyboard.press("Escape")
+                    time.sleep(0.8)
+            if not opened:
+                raise GeminiError("không mở được menu cấu hình")
+            dlg = page.locator("[role=dialog], mat-dialog-container").last
+            dlg.wait_for(timeout=8000)
+            if rules.strip():
+                dlg.get_by_role("radio", name=re.compile(r"chỉnh|custom", re.I)).first.click()
+                time.sleep(0.6)
+                dlg.get_by_role("textbox").first.fill(rules.strip()[:10000])
+            if longer:
+                dlg.get_by_role("radio", name=re.compile(r"chi tiết|longer|detailed", re.I)).first.click()
+            time.sleep(0.5)
+            dlg.locator("button[type=submit]").first.click()
+            dlg.wait_for(state="hidden", timeout=10000)
+            self.log("   ⚙️ Đã cấu hình chat: " + ("Tuỳ chỉnh" if rules.strip() else "Mặc định")
+                     + (" + Dài hơn" if longer else ""))
+            return True
+        except Exception as e:
+            self.log(f"   (bỏ qua bước cấu hình chat: {str(e)[:120]})")
+            try:
+                page.keyboard.press("Escape")
+            except Exception:
+                pass
+            return False
+
+    def rename(self, title):
+        """Đặt tên sổ (ô tiêu đề ở góc trái trên). Lỗi thì bỏ qua."""
+        if not title:
+            return
+        try:
+            for inp in self.page.locator("input").all()[:12]:
+                box = inp.bounding_box()
+                ph = inp.get_attribute("placeholder") or ""
+                if box and box["y"] < 110 and inp.is_visible() and not re.search(r"tìm|search", ph, re.I):
+                    inp.click()
+                    inp.fill(title[:120])
+                    inp.press("Enter")
+                    time.sleep(1)
+                    return
+        except Exception:
+            pass
+
+    def open_article(self, file_path, title="", chat_rules="", longer=True):
+        """Tạo sổ MỚI cho 1 bài: tải bài lên (tệp) + nguồn cố định + cấu hình chat + đặt tên."""
+        self._check_cancel()
+        self._create_notebook(add_fixed=False)
+        try:
+            self._upload_file(file_path)
+            self.log(f"   + tải lên bài gốc: {os.path.basename(file_path)}")
+        except Exception as e:
+            self.log(f"   ⚠️ Không tải lên được tệp ({str(e)[:120]}) — dán văn bản thay thế.")
+            with open(file_path, "r", encoding="utf-8") as f:
+                self._add_source(f.read())
+        for i, src in enumerate(self.fixed_sources, start=1):
+            self._add_source(src)
+            self.log(f"   + nguồn cố định {i}/{len(self.fixed_sources)} ({len(src):,} ký tự)")
+        self.custom_ok = self.configure_chat(chat_rules, longer)
+        self.rename(title)
+        self._wait_chat_ready()
+        self._need_new = False
+
     def _wait_chat_ready(self, timeout=90):
         t0 = time.time()
         while time.time() - t0 < timeout:
@@ -272,7 +420,7 @@ class NotebookSession:
         if self._need_new:
             self._create_notebook()
         box = page.locator(QUERY_BOX).first
-        full = PROMPT_RULES + prompt
+        full = prompt if self.custom_ok else PROMPT_RULES + prompt
         before = len(page.query_selector_all(ANSWER_SEL))
 
         box.click()

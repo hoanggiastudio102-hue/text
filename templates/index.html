@@ -661,7 +661,7 @@
         <div id="tab-notebook" class="workspace tab-content" style="display: none;">
             <div class="card input-section">
                 <h2><i class="fa-solid fa-book-open"></i> NotebookLM — Thư mục &amp; Dạng bài</h2>
-                <p class="lz-hint">Tạo thư mục, trong đó là các dạng bài (mỗi dạng có prompt riêng và các nguồn cố định như quy tắc, bài mẫu). Dán bài vào một dạng bài, chọn nước, Tool tạo sổ NotebookLM mới cho từng bài × nước và lấy bản viết về. Tool <b>không xoá</b> gì trong NotebookLM.</p>
+                <p class="lz-hint">Tạo thư mục, trong đó là các dạng bài (mỗi dạng có prompt riêng và các nguồn cố định như quy tắc, bài mẫu). Dán bài vào một dạng bài, chọn nước, Mỗi bài: Tool tạo 1 sổ NotebookLM mới, tải bài lên dạng tệp, rồi lần lượt gõ lệnh cho từng nước (tự nhắn "Tiếp tục" khi bị cụt). Tool <b>không xoá</b> gì trong NotebookLM.</p>
 
                 <div class="lz-actions-row">
                     <button type="button" id="nbFolderNew" class="btn-primary"><i class="fa-solid fa-folder-plus"></i> Thư mục mới</button>
@@ -745,18 +745,20 @@
                 <div class="form-group"><label>Tên dạng bài</label><input type="text" id="nbTName" class="glass-input" placeholder="VD: Phân tích sản phẩm"></div>
                 <div class="form-group"><label>Chế độ</label>
                     <select id="nbTMode" class="glass-input"><option value="rewrite">Sáng tạo + bản địa hoá</option><option value="localize">Giữ sát ý gốc + chỉnh cho tự nhiên</option><option value="analyze">Phân tích chuyên sâu</option></select></div>
-                <div class="form-group"><label>Prompt của dạng bài (cách viết / phân tích)</label>
-                    <textarea id="nbTPrompt" class="glass-input" rows="9" placeholder="VD:&#10;- Giọng văn ...&#10;- Cấu trúc ...&#10;- Không bịa số liệu."></textarea></div>
-                <div class="form-group"><label>Nguồn cố định nạp vào mỗi sổ (quy tắc vàng, bài mẫu cao view…). Muốn nhiều nguồn: ngăn cách bằng dòng =====</label>
-                    <textarea id="nbTFixed" class="glass-input" rows="7" placeholder="Dán quy tắc / bài mẫu. Để trống nếu không cần."></textarea></div>
-                <div class="form-group"><label>Độ dài bản viết</label>
-                    <select id="nbTLength" class="glass-input"><option value="same">Tương đương bài gốc</option><option value="longer">Dài hơn</option><option value="shorter">Ngắn hơn</option></select></div>
-                <div class="form-group"><label>Cỡ mỗi đoạn gửi đi (ký tự)</label><input type="number" id="nbTChunk" class="glass-input" value="8000" min="2000" max="40000" step="1000"></div>
-                <div class="form-group"><label>Đối tượng người đọc (tuỳ chọn)</label><input type="text" id="nbTAudience" class="glass-input"></div>
+                <div class="form-group"><label>Câu lệnh gửi cho mỗi nước <small class="lz-muted">— dùng được {QUOC_GIA}, {NGON_NGU}, {DOI_TUONG}, {TEN_BAI}; không có biến thì Tool tự gõ tên nước ở cuối</small></label>
+                    <textarea id="nbTPrompt" class="glass-input" rows="9"></textarea>
+                    <div class="lz-actions-row"><button type="button" class="btn-primary" id="nbTDefault"><i class="fa-solid fa-wand-magic-sparkles"></i> Dùng mẫu chuyển ngữ giữ nguyên</button></div></div>
+                <div class="form-group"><label>Đối tượng khán giả <small class="lz-muted">(điền vào {DOI_TUONG}, VD: người trung niên bản xứ)</small></label><input type="text" id="nbTAudience" class="glass-input"></div>
+                <div class="form-group"><label>Hướng dẫn cấu hình chat của sổ <small class="lz-muted">(⋮ → Định cấu hình cuộc trò chuyện → Tuỳ chỉnh, tối đa 10.000 ký tự; Tool đã tự thêm quy tắc "không lời dẫn, không rút gọn, giữ định dạng")</small></label>
+                    <textarea id="nbTRules" class="glass-input" rows="4" placeholder="VD: Giọng kể chuyện lịch sử, câu ngắn, dễ nghe khi đọc thành video."></textarea></div>
+                <label class="lz-check"><input type="checkbox" id="nbTLonger" checked> <span>Đặt độ dài câu trả lời của sổ là <b>Dài hơn</b></span></label>
+                <div class="form-group"><label>Nguồn cố định thêm vào mỗi sổ (quy tắc vàng, bài mẫu cao view…). Nhiều nguồn: ngăn cách bằng dòng =====</label>
+                    <textarea id="nbTFixed" class="glass-input" rows="5" placeholder="Để trống nếu chỉ chuyển ngữ."></textarea></div>
+                <div class="form-group"><label>Độ dài bản ra so với bài gốc</label>
+                    <select id="nbTLength" class="glass-input"><option value="same">Tương đương bài gốc (tự nhắn 'Tiếp tục' nếu bị cụt)</option><option value="longer">Dài hơn</option><option value="shorter">Ngắn hơn</option></select></div>
                 <div class="form-group"><label>Từ khoá (mỗi dòng một từ, tuỳ chọn)</label><textarea id="nbTKeywords" class="glass-input" rows="2"></textarea></div>
                 <div class="form-group"><label>Bảng thuật ngữ (A = B, tuỳ chọn)</label><textarea id="nbTGlossary" class="glass-input" rows="2"></textarea></div>
                 <div class="form-group"><label>Yêu cầu thêm (tuỳ chọn)</label><textarea id="nbTExtra" class="glass-input" rows="2"></textarea></div>
-                <label class="lz-check"><input type="checkbox" id="nbTReview"> <span><b>Tự soát lại lần 2</b> (chất lượng cao hơn, chậm gần gấp đôi)</span></label>
                 <button type="button" class="btn-primary" id="nbTSave"><i class="fa-solid fa-floppy-disk"></i> Lưu dạng bài</button>
             </div>
         </div>

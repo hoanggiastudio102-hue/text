@@ -32,6 +32,7 @@
     const selected = new Set();
     let jobId = null, pollTimer = null, shownFile = null;
     let editTypeId = null;
+    let defaultPrompt = '';
 
     // ---------- thư mục / dạng bài ----------
     const curFolder = () => folders.find((f) => f.id === $('nbFolder').value) || null;
@@ -40,6 +41,7 @@
     async function loadTree(keepFolder, keepType) {
         const d = await jget('/api/nb/tree');
         folders = (d.data && d.data.folders) || [];
+        defaultPrompt = d.default_prompt || defaultPrompt;
         const fsel = $('nbFolder');
         fsel.innerHTML = folders.length ? '' : '<option value="">(Chưa có thư mục — bấm "Thư mục mới")</option>';
         folders.forEach((f) => { const o = document.createElement('option'); o.value = f.id; o.textContent = `${f.name} (${f.types.length})`; fsel.appendChild(o); });
@@ -61,7 +63,7 @@
         if (!t) { $('nbTypeInfo').textContent = ''; return; }
         const nsrc = (t.fixed_text || '').split(/^\s*={5,}\s*$/m).filter((x) => x.trim()).length;
         const md = t.mode === 'localize' ? 'giữ sát ý gốc' : t.mode === 'analyze' ? 'phân tích' : 'sáng tạo';
-        $('nbTypeInfo').textContent = `${md} · ${nsrc} nguồn cố định${t.review ? ' · tự soát' : ''}`;
+        $('nbTypeInfo').textContent = `${md} · ${nsrc} nguồn cố định${t.longer !== false ? ' · Dài hơn' : ''}`;
     }
     $('nbFolder').addEventListener('change', () => renderTypes());
     $('nbType').addEventListener('change', updateTypeInfo);
@@ -94,19 +96,20 @@
         $('nbTypeModalTitle').textContent = t ? 'Sửa dạng bài' : 'Dạng bài mới';
         $('nbTName').value = t ? t.name : '';
         $('nbTMode').value = t ? t.mode : 'rewrite';
-        $('nbTPrompt').value = t ? t.prompt : '';
+        $('nbTPrompt').value = t ? t.prompt : defaultPrompt;
+        $('nbTRules').value = t ? (t.chat_rules || '') : '';
+        $('nbTLonger').checked = t ? t.longer !== false : true;
         $('nbTFixed').value = t ? t.fixed_text : '';
         $('nbTLength').value = t ? t.length : 'same';
-        $('nbTChunk').value = t ? t.chunk_size : 8000;
         $('nbTAudience').value = t ? t.audience : '';
         $('nbTKeywords').value = t ? t.keywords : '';
         $('nbTGlossary').value = t ? t.glossary : '';
         $('nbTExtra').value = t ? t.extra : '';
-        $('nbTReview').checked = !!(t && t.review);
         $('nbTypeModal').style.display = 'flex';
     }
     $('nbTypeNew').addEventListener('click', () => { if (!curFolder()) return toast('Hãy tạo thư mục trước.', true); openTypeModal(null); });
     $('nbTypeEdit').addEventListener('click', () => { const t = curType(); if (t) openTypeModal(t); else toast('Chưa chọn dạng bài.', true); });
+    $('nbTDefault').addEventListener('click', () => { $('nbTPrompt').value = defaultPrompt; if (!$('nbTAudience').value) $('nbTAudience').value = 'người trung niên bản xứ'; });
     $('nbTypeModalClose').addEventListener('click', () => { $('nbTypeModal').style.display = 'none'; });
     $('nbTypeDel').addEventListener('click', async () => {
         const t = curType();
@@ -119,9 +122,9 @@
         if (!f) return;
         const d = await jpost('/api/nb/type', {
             folder_id: f.id, id: editTypeId, name: $('nbTName').value, mode: $('nbTMode').value, prompt: $('nbTPrompt').value,
-            fixed_text: $('nbTFixed').value, length: $('nbTLength').value, chunk_size: $('nbTChunk').value,
+            fixed_text: $('nbTFixed').value, length: $('nbTLength').value, chat_rules: $('nbTRules').value, longer: $('nbTLonger').checked,
             audience: $('nbTAudience').value, keywords: $('nbTKeywords').value, glossary: $('nbTGlossary').value,
-            extra: $('nbTExtra').value, review: $('nbTReview').checked,
+            extra: $('nbTExtra').value,
         });
         if (d.status !== 'success') return toast(d.message || 'Không lưu được', true);
         $('nbTypeModal').style.display = 'none';

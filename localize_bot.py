@@ -16,6 +16,7 @@ Cấu trúc job.json (rút gọn):
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 import time
@@ -212,6 +213,162 @@ def process_unit(job, session, article, code, chunks):
 
 
 # ---------------------------------------------------------------------------
+# NOTEBOOKLM: 1 bài = 1 sổ (bài gốc là nguồn tệp), mỗi nước = 1 câu lệnh ngắn + tên nước ở cuối,
+# tự nhắn "Tiếp tục" khi câu trả lời bị cụt.
+# ---------------------------------------------------------------------------
+VI_LANG = {
+    "US": "tiếng Anh (Mỹ)", "GB": "tiếng Anh (Anh)", "AU": "tiếng Anh (Úc)", "VN": "tiếng Việt",
+    "JP": "tiếng Nhật", "KR": "tiếng Hàn", "CN": "tiếng Trung giản thể (đại lục)", "TW": "tiếng Trung phồn thể (Đài Loan)",
+    "HK": "tiếng Trung phồn thể (Hồng Kông)", "TH": "tiếng Thái", "ID": "tiếng Indonesia", "MY": "tiếng Mã Lai (Malaysia)",
+    "PH": "tiếng Filipino", "IN": "tiếng Hindi", "DE": "tiếng Đức", "FR": "tiếng Pháp", "ES": "tiếng Tây Ban Nha (Tây Ban Nha)",
+    "IT": "tiếng Ý", "PT": "tiếng Bồ Đào Nha (Bồ Đào Nha)", "NL": "tiếng Hà Lan", "PL": "tiếng Ba Lan", "SE": "tiếng Thụy Điển",
+    "CZ": "tiếng Séc", "RO": "tiếng Romania", "GR": "tiếng Hy Lạp", "RU": "tiếng Nga", "UA": "tiếng Ukraina",
+    "TR": "tiếng Thổ Nhĩ Kỳ", "MX": "tiếng Tây Ban Nha (Mexico)", "AR": "tiếng Tây Ban Nha (Argentina)",
+    "BR": "tiếng Bồ Đào Nha (Brazil)", "SA": "tiếng Ả Rập (Ả Rập Xê Út)", "EG": "tiếng Ả Rập (Ai Cập)",
+    "SAME": "ngôn ngữ gốc của bài",
+}
+
+NB_DEFAULT_PROMPT = (
+    "Chuyển đổi TOÀN BỘ văn bản trong nguồn \"{TEN_BAI}\" sang {NGON_NGU}.\n"
+    "- GIỮ NGUYÊN nội dung, ý, số liệu, tên riêng, thứ tự và độ dài như bản gốc; tuyệt đối không tự ý thêm bớt, không tóm tắt.\n"
+    "- Trình bày và định dạng (tiêu đề, đoạn, xuống dòng, gạch đầu dòng) y như bản gốc.\n"
+    "- Văn phong tự nhiên như người bản xứ viết, phù hợp với khán giả là {DOI_TUONG}; không dịch word-by-word.\n"
+    "- Chỉ trả về bản đã chuyển ngữ, không lời dẫn, không ghi chú.\n"
+    "Quốc gia: {QUOC_GIA}")
+
+
+def nb_prompt(cfg, article, code):
+    country = locales.get_country(code)
+    lang = VI_LANG.get(code, country["language"])
+    vals = {"QUOC_GIA": country["name_vi"], "NGON_NGU": lang, "TEN_BAI": article["name"],
+            "DOI_TUONG": (cfg.get("audience") or "").strip() or f"người {country['name_vi']}"}
+    tpl = (cfg.get("style_text") or "").strip() or NB_DEFAULT_PROMPT
+    has_var = any("{" + k + "}" in tpl for k in vals)
+    p = tpl
+    for k, v in vals.items():
+        p = p.replace("{" + k + "}", v)
+    if not has_var:                       # mẫu không có biến: gõ tên nước ở cuối như sếp làm tay
+        p += f"\n\nQuốc gia: {country['name_vi']} — viết bằng {lang}."
+    if (cfg.get("keywords") or "").strip():
+        p += "\nTừ khoá cần giữ/đưa vào: " + ", ".join(x.strip() for x in cfg["keywords"].splitlines() if x.strip())
+    if (cfg.get("glossary") or "").strip():
+        p += "\nBảng thuật ngữ bắt buộc:\n" + cfg["glossary"].strip()
+    if (cfg.get("extra") or "").strip():
+        p += "\nYêu cầu thêm: " + cfg["extra"].strip()
+    return p
+
+
+def merge_continuation(prev, new):
+    """Nối phần 'Tiếp tục' vào bản trước, bỏ đoạn bị lặp lại ở đầu phần mới."""
+    new = (new or "").strip()
+    tail = prev[-400:]
+    for k in range(min(len(tail), 300), 29, -10):
+        seg = tail[-k:]
+        i = new.find(seg, 0, k + 600)
+        if i != -1:
+            new = new[i + len(seg):].lstrip()
+            break
+    return (prev.rstrip() + "\n\n" + new).strip() if new else prev
+
+
+def process_unit_nb(job, session, article, code):
+    cfg = job.data
+    country = locales.get_country(code)
+    with open(os.path.join(job.dir, "sources", article["file"]), "r", encoding="utf-8") as f:
+        src = f.read()
+    res = cfg["results"][rkey(article["id"], code)]
+    res.update(status="running", started_at=time.time(), chunks_total=1, chunks_done=0, error="")
+    cfg["current"] = {"article": article["id"], "code": code}
+    job.save()
+    job.log(f"▶ [{article['name']}] {country['flag']} {country['name_vi']} — NotebookLM")
+
+    text = ""
+    for attempt in (1, 2):
+        try:
+            text = session.ask(nb_prompt(cfg, article, code))
+            if not text.strip():
+                raise GeminiError("NotebookLM trả về nội dung rỗng.")
+            break
+        except (GeminiLimitError, GeminiCancelled):
+            raise
+        except GeminiError as e:
+            job.log(f"   ⚠️ {e}")
+            if attempt == 2:
+                raise
+            time.sleep(5)
+
+    # Bị cụt (giới hạn độ dài 1 câu trả lời) -> nhắn "Tiếp tục" và nối lại, tối đa 8 lượt.
+    if cfg.get("mode") != "analyze" and cfg.get("length", "same") != "shorter" and len(src) > 1500:
+        factor = 1.4 if cfg.get("length") == "longer" else 1.0
+        want, unit = locales.target_units(src, code, factor)
+        for rnd in range(1, 9):
+            have = locales.measure(text, code)
+            if have >= 0.9 * want:
+                break
+            job.log(f"   ↪ mới {have:,}/{want:,} {unit} — nhắn 'Tiếp tục' ({rnd}/8)…")
+            res["chunks_total"] = rnd + 1
+            job.save()
+            last = text.strip()[-160:].replace("\n", " ")
+            try:
+                more = session.ask(
+                    f"Tiếp tục bản {VI_LANG.get(code, country['language'])} từ ĐÚNG chỗ vừa dừng (ngay sau đoạn: "
+                    f"\"…{last}\"). Không lặp lại phần đã viết, không lời dẫn. Nếu đã chuyển hết bài thì chỉ trả lời "
+                    f"đúng một từ: HẾT")
+            except (GeminiLimitError, GeminiCancelled):
+                raise
+            except GeminiError as e:
+                job.log(f"   (dừng bước tiếp tục: {e})")
+                break
+            if re.fullmatch(r"\W*(HẾT|HET|END|DONE)\W*", more.strip(), re.I) or len(more.strip()) < 40:
+                break
+            merged = merge_continuation(text, more)
+            if len(merged) <= len(text) + 40:
+                break
+            text = merged
+        have = locales.measure(text, code)
+        if have < 0.8 * want:
+            job.log(f"   ⚠️ bản ra vẫn ngắn ({have:,}/{want:,} {unit}) — sếp kiểm tra lại bản này.")
+
+    final = re.sub(r"\n?\s*\bHẾT\W*$", "", text.strip()).strip()
+    fname = f"{article['name']}_{code}.txt"
+    art_dir = os.path.join(job.files_dir, article["id"])
+    os.makedirs(art_dir, exist_ok=True)
+    with open(os.path.join(art_dir, fname), "w", encoding="utf-8") as f:
+        f.write(final + "\n")
+    res.update(status="done", file=f"{article['id']}/{fname}", chars=len(final), chunks_done=res.get("chunks_total", 1),
+               finished_at=time.time())
+    job.save()
+    job.log(f"✅ Xong [{article['name']}] {country['name_vi']}: {len(final):,} ký tự (gốc {len(src):,}) -> {fname}")
+
+
+def nb_open_article(job, session, article):
+    """Sổ mới cho bài: tải bài gốc lên dạng tệp mang đúng tên bài (giống thao tác tay của sếp)."""
+    cfg = job.data
+    nb = cfg.get("nb") or {}
+    up_dir = os.path.join(job.dir, "upload")
+    os.makedirs(up_dir, exist_ok=True)
+    path = os.path.join(up_dir, f"{article['name']}.txt")
+    shutil.copyfile(os.path.join(job.dir, "sources", article["file"]), path)
+    from notebook_client import BASE_CHAT_RULES
+    rules = (BASE_CHAT_RULES + "\n\n" + (nb.get("chat_rules") or "")).strip()
+    title = " | ".join(x for x in (article["name"], nb.get("type")) if x)
+    session.open_article(path, title=title, chat_rules=rules, longer=nb.get("longer", True))
+    session.article_id = article["id"]
+
+
+class DryNotebook(DryRunSession):
+    article_id = None
+
+    def open_article(self, path, **k):
+        self.log(f"[CHẠY THỬ] sổ mới + tải lên {os.path.basename(path)}")
+
+    def ask(self, prompt, **k):
+        if prompt.startswith("Tiếp tục"):
+            return "HẾT"
+        return f"[CHẠY THỬ NotebookLM] {prompt[:200]}"
+
+
+# ---------------------------------------------------------------------------
 # ĐÓNG GÓI
 # ---------------------------------------------------------------------------
 def finalize(job):
@@ -302,8 +459,11 @@ def run_job(job_dir, session_factory=None):
                 r["status"] = "pending"
                 todo.append((a, code))
 
+    is_nb = cfg.get("engine") == "notebook"
     if session_factory is None:
-        if cfg.get("dry_run"):
+        if is_nb and cfg.get("dry_run"):
+            session_factory = lambda: DryNotebook(log=job.log, on_tick=job.beat, should_cancel=job.cancelled)
+        elif cfg.get("dry_run"):
             session_factory = lambda: DryRunSession(log=job.log, on_tick=job.beat, should_cancel=job.cancelled)
         elif cfg.get("engine") == "notebook":
             from notebook_client import NotebookSession
@@ -332,6 +492,12 @@ def run_job(job_dir, session_factory=None):
                     break
                 key = rkey(article["id"], code)
                 try:
+                    if is_nb:
+                        if getattr(session, "article_id", None) != article["id"]:
+                            nb_open_article(job, session, article)
+                        process_unit_nb(job, session, article, code)
+                        job.save()
+                        continue
                     if article["id"] not in chunk_cache:
                         with open(os.path.join(job.dir, "sources", article["file"]), "r", encoding="utf-8") as f:
                             chunk_cache[article["id"]] = locales.split_text(f.read(), _chunk_len(cfg, article))

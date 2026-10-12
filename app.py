@@ -1138,7 +1138,8 @@ import notebook_store
 
 @app.route("/api/nb/tree")
 def api_nb_tree():
-    return jsonify({"status": "success", "data": notebook_store.tree()})
+    from localize_bot import NB_DEFAULT_PROMPT
+    return jsonify({"status": "success", "data": notebook_store.tree(), "default_prompt": NB_DEFAULT_PROMPT})
 
 
 @app.route("/api/nb/folder", methods=["POST"])
@@ -1205,7 +1206,8 @@ def api_nb_run():
     job = {
         "id": job_id, "created_at": time.time(), "state": "queued", "error": "", "engine": "notebook",
         "nb": {"folder": folder["name"], "type": typ["name"], "folder_id": folder["id"], "type_id": typ["id"],
-               "fixed_sources": notebook_store.split_fixed(typ.get("fixed_text"))},
+               "fixed_sources": notebook_store.split_fixed(typ.get("fixed_text")),
+               "chat_rules": typ.get("chat_rules", ""), "longer": bool(typ.get("longer", True))},
         "base_name": _safe_name(form.get("customFilename"), meta_articles[0]["name"]) if len(meta_articles) == 1
                      else _safe_name(form.get("customFilename"), "BaiViet"),
         "articles": meta_articles, "countries": countries, "results": {},

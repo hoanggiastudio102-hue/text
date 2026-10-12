@@ -12,7 +12,8 @@ STORE = os.path.join(BASE_DIR, "notebook_store.json")
 _LOCK = threading.Lock()
 
 TYPE_FIELDS = {"name": "", "prompt": "", "mode": "rewrite", "length": "same", "review": False, "chunk_size": 8000,
-               "fixed_text": "", "audience": "", "keywords": "", "glossary": "", "extra": ""}
+               "fixed_text": "", "audience": "", "keywords": "", "glossary": "", "extra": "",
+               "chat_rules": "", "longer": True}
 MODES = ("rewrite", "localize", "analyze")
 LENGTHS = ("same", "longer", "shorter")
 
@@ -28,8 +29,21 @@ def _load():
     return {"folders": []}
 
 
+def _seed():
+    """Lần đầu: tạo sẵn thư mục 'Chuyển ngữ' với dạng bài làm đúng như quy trình tay của sếp."""
+    from localize_bot import NB_DEFAULT_PROMPT
+    t = _clean_type({"name": "Chuyển ngữ giữ nguyên (như làm tay)", "prompt": NB_DEFAULT_PROMPT,
+                     "mode": "localize", "audience": "người trung niên bản xứ", "longer": True})
+    t["id"] = uuid.uuid4().hex[:10]
+    d = {"folders": [{"id": uuid.uuid4().hex[:10], "name": "Chuyển ngữ", "types": [t]}]}
+    write_json_atomic(STORE, d)
+    return d
+
+
 def tree():
     with _LOCK:
+        if not os.path.isfile(STORE):
+            return _seed()
         return _load()
 
 
@@ -44,11 +58,12 @@ def _clean_type(src, old=None):
     t["mode"] = t["mode"] if t["mode"] in MODES else "rewrite"
     t["length"] = t["length"] if t["length"] in LENGTHS else "same"
     t["review"] = bool(t["review"])
+    t["longer"] = bool(t["longer"])
     try:
         t["chunk_size"] = max(2000, min(40000, int(t["chunk_size"])))
     except (TypeError, ValueError):
         t["chunk_size"] = 8000
-    for k in ("prompt", "fixed_text", "audience", "keywords", "glossary", "extra"):
+    for k in ("prompt", "fixed_text", "audience", "keywords", "glossary", "extra", "chat_rules"):
         t[k] = str(t[k] or "")
     return t
 
@@ -95,8 +110,6 @@ def save_type(folder_id, src, type_id=None):
             f["types"].append(t)
         if not t["name"]:
             raise ValueError("Tên dạng bài không được để trống.")
-        if not t["prompt"].strip():
-            raise ValueError("Hãy nhập prompt (cách viết / phân tích) cho dạng bài.")
         write_json_atomic(STORE, d)
         return t
 
