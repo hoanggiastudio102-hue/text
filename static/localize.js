@@ -133,7 +133,7 @@
     });
 
     // ---- chọn model/mức suy luận bằng danh sách ----
-    const PRESETS = ['3.5 Flash-Lite', '3.8 Flash', '3.1 Pro'];
+    const PRESETS = ['3.5 Flash-Lite', '3.8 Flash', '3.1 Pro', '4 Argon'];
     function syncModelSelect() {
         const v = ($('gmModel').value || '').trim();
         const hit = PRESETS.find((p) => p.toLowerCase() === v.toLowerCase());
