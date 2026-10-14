@@ -98,7 +98,7 @@ def redeem_pair_code(code, hostname=""):
 # Mỗi tài khoản = 1 máy nhân viên. Sếp cấp tài khoản + mật khẩu; máy nhân viên đăng nhập 1 lần để nhận token
 # (máy không lưu mật khẩu). Đăng nhập lại ở máy khác thì token cũ của tài khoản đó bị thay.
 import re as _re
-_USER_RE = _re.compile(r"^[a-z0-9][a-z0-9_.-]{2,29}$")
+_USER_RE = _re.compile(r"^[a-z0-9][a-z0-9_.@+-]{2,63}$")   # cho phép dùng email làm tên đăng nhập
 _PBKDF_ROUNDS = 200_000
 _FAILS = {}            # key -> [thời điểm sai]  (chống dò mật khẩu)
 MAX_FAILS_USER, MAX_FAILS_IP, FAIL_WINDOW = 8, 40, 10 * 60
@@ -144,8 +144,9 @@ def list_accounts():
 
 def create_account(username, display_name="", password="", role="staff"):
     u = (username or "").strip().lower()
+    role = role if role in ("staff", "admin") else "staff"
     if not _USER_RE.match(u):
-        raise ValueError("Tên tài khoản 3-30 ký tự: chữ thường, số, dấu . _ - (VD: mac02).")
+        raise ValueError("Tên đăng nhập 3-64 ký tự: chữ thường, số, dấu . _ - @ + (VD: mac02 hoặc email).")
     password = password or gen_password()
     if len(password) < 6:
         raise ValueError("Mật khẩu tối thiểu 6 ký tự.")

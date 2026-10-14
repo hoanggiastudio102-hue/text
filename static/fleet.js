@@ -97,18 +97,20 @@
         const rows = accounts.filter(a => (accFilter === 'all' || (accFilter === 'locked') === a.locked)
             && (!q || (a.username + ' ' + a.display_name).toLowerCase().includes(q)));
         $('flAccounts').innerHTML = rows.length ? rows.map(a => {
-            const st = a.locked ? '<span class="fl-pill off">Đã khoá</span>'
-                : a.online ? (a.state && a.state.job ? '<span class="fl-pill run">Đang chạy</span>' : '<span class="fl-pill on">Đang kết nối</span>')
-                : a.last_login ? '<span class="fl-pill off">Ngoại tuyến · ' + ago(a.last_seen || a.last_login) + '</span>' : '<span class="fl-pill warn">Chưa đăng nhập máy</span>';
-            const gem = a.online && a.state && a.state.gemini_logged_in === false ? '<div class="lz-muted" style="color:#fcd34d">Chưa đăng nhập Gemini</div>' : '';
-            return `<tr><td><div class="fl-user"><span class="fl-av">${esc((a.display_name || a.username).charAt(0).toUpperCase())}</span>
-                <div><b>${esc(a.display_name)}</b> <button class="fl-link" data-act="rename" data-u="${esc(a.username)}" title="Đổi tên hiển thị"><i class="fa-solid fa-pen"></i></button>
-                <div class="lz-muted">@${esc(a.username)} · tạo ${fmtT(a.created)}</div></div></div></td>
-                <td>${st}${gem}</td><td>${a.last_login ? ago(a.last_login) : '—'}</td><td>${esc(a.last_ip || '—')}</td>
-                <td>${num(a.stats.units)} bản<div class="lz-muted">${num(a.stats.jobs)} job</div></td>
-                <td class="fl-acts"><button class="btn-primary fl-mini" data-act="pass" data-u="${esc(a.username)}">Đặt mật khẩu</button>
-                <button class="btn-primary fl-mini" data-act="${a.locked ? 'unlock' : 'lock'}" data-u="${esc(a.username)}">${a.locked ? 'Mở khoá' : 'Khoá'}</button>
-                <button class="btn-primary fl-danger fl-mini" data-act="del" data-u="${esc(a.username)}">Xoá</button></td></tr>`;
+            const st = a.locked ? '<span class="fl-pill off">Đã khoá</span>' : '<span class="fl-pill on">Hoạt động</span>';
+            const conn = a.locked ? '' : a.online ? (a.state && a.state.job ? 'đang chạy job' : 'máy đang kết nối')
+                : a.last_login ? 'ngoại tuyến · ' + ago(a.last_seen || a.last_login) : 'chưa đăng nhập máy';
+            const gem = a.online && a.state && a.state.gemini_logged_in === false ? ' · <span style="color:#fcd34d">chưa đăng nhập Gemini</span>' : '';
+            const role = a.role === 'admin' ? 'Quản trị' : 'Nhân viên';
+            const day = a.created ? new Date(a.created * 1000).toLocaleString('vi-VN', { hour12: false }) : '—';
+            return `<tr><td><b>${esc(a.username)}</b></td>
+                <td>${esc(a.display_name)} <button class="fl-link" data-act="rename" data-u="${esc(a.username)}" title="Đổi tên hiển thị"><i class="fa-solid fa-pen"></i></button></td>
+                <td>${role}</td>
+                <td>${st}<div class="lz-muted">${conn}${gem}</div></td>
+                <td>${day}</td>
+                <td class="fl-acts"><button class="btn-primary fl-mini" data-act="${a.locked ? 'unlock' : 'lock'}" data-u="${esc(a.username)}"><i class="fa-solid fa-lock${a.locked ? '-open' : ''}"></i> ${a.locked ? 'Mở khoá' : 'Khoá'}</button>
+                <button class="btn-primary fl-mini" data-act="pass" data-u="${esc(a.username)}"><i class="fa-solid fa-key"></i> Đổi mật khẩu</button>
+                <button class="btn-primary fl-danger fl-mini" data-act="del" data-u="${esc(a.username)}" title="Xoá tài khoản"><i class="fa-solid fa-trash"></i></button></td></tr>`;
         }).join('') : '<tr><td colspan="6" class="lz-muted">Không có tài khoản nào khớp.</td></tr>';
     }
     function showCred(title, acc, pw) {
@@ -134,7 +136,7 @@
         $('flAccForm').addEventListener('submit', async (e) => {
             e.preventDefault(); $('flAccErr').style.display = 'none';
             const { j } = await jfetch('/api/fleet-admin/accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: $('flAccUser').value, display_name: $('flAccName').value, password: $('flAccPass').value }) });
+                body: JSON.stringify({ username: $('flAccUser').value, display_name: $('flAccName').value, password: $('flAccPass').value, role: $('flAccRole').value }) });
             if (j.status !== 'success') { $('flAccErr').textContent = j.message || 'Không tạo được tài khoản'; $('flAccErr').style.display = ''; return; }
             showCred('Đã tạo tài khoản', j.account, j.password); loadAccounts();
         });
@@ -153,8 +155,9 @@
             const patch = async (body) => (await jfetch('/api/fleet-admin/accounts/' + encodeURIComponent(u), { method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).j;
             if (b.dataset.act === 'pass') {
-                if (!confirm('Tạo mật khẩu mới cho ' + a.display_name + '? Máy đang dùng vẫn chạy, mật khẩu mới dùng cho lần đăng nhập sau.')) return;
-                const j = await patch({ reset_password: true }); if (j.status === 'success') showCred('Mật khẩu mới', a, j.password); else toast(j.message || 'Lỗi', true);
+                const np = prompt('Mật khẩu mới cho ' + a.display_name + ' (tối thiểu 6 ký tự).\nĐể trống = Tool tạo ngẫu nhiên. Máy đang dùng vẫn chạy, mật khẩu mới dùng cho lần đăng nhập sau.', '');
+                if (np === null) return;
+                const j = await patch({ reset_password: true, password: np.trim() }); if (j.status === 'success') showCred('Mật khẩu mới', a, j.password); else toast(j.message || 'Lỗi', true);
             } else if (b.dataset.act === 'lock' || b.dataset.act === 'unlock') {
                 const lock = b.dataset.act === 'lock';
                 if (lock && !confirm('Khoá ' + a.display_name + '? Máy này sẽ ngừng gửi báo cáo (giữ lịch sử, mở khoá lại được).')) return;

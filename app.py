@@ -1441,7 +1441,8 @@ def fleet_accounts():
         return jsonify({"status": "success", "accounts": fleet.list_accounts()})
     d = request.get_json(silent=True) or {}
     try:
-        acc, pw = fleet.create_account(d.get("username"), d.get("display_name", ""), d.get("password", ""))
+        acc, pw = fleet.create_account(d.get("username"), d.get("display_name", ""), d.get("password", ""),
+                                       d.get("role") or "staff")
     except ValueError as e:
         return jsonify({"status": "error", "message": str(e)}), 400
     return jsonify({"status": "success", "account": acc, "password": pw})

@@ -838,8 +838,9 @@
             <div class="lz-modal-box" style="max-width:520px;">
                 <div class="lz-modal-head"><b id="flAccModalTitle">Cấp tài khoản</b><button type="button" id="flAccModalClose" class="btn-primary">Đóng</button></div>
                 <form id="flAccForm" autocomplete="off">
-                    <div class="form-group"><label>Tên tài khoản (đăng nhập)</label><input type="text" id="flAccUser" class="glass-input" placeholder="VD: mac10" autocapitalize="none"></div>
+                    <div class="form-group"><label>Tên đăng nhập <small class="lz-muted">(VD: mac10 hoặc email)</small></label><input type="text" id="flAccUser" class="glass-input" placeholder="VD: tuyn275@gmail.com" autocapitalize="none"></div>
                     <div class="form-group"><label>Tên hiển thị</label><input type="text" id="flAccName" class="glass-input" placeholder="VD: MAC10 AN GLOBAL"></div>
+                    <div class="form-group"><label>Vai trò</label><select id="flAccRole" class="glass-input"><option value="staff">Nhân viên</option><option value="admin">Quản trị</option></select></div>
                     <div class="form-group"><label>Mật khẩu <small class="lz-muted">(để trống = tự tạo ngẫu nhiên)</small></label>
                         <div class="fl-inline"><input type="text" id="flAccPass" class="glass-input" placeholder="Tối thiểu 6 ký tự"><button type="button" class="btn-primary" id="flAccGen">Tạo ngẫu nhiên</button></div></div>
                     <div class="lz-error" id="flAccErr" style="display:none;"></div>
@@ -924,7 +925,7 @@
                 <div class="fl-grid">
                     <section class="fl-box fl-wide" id="flHubBox">
                         <div class="fl-acc-head">
-                            <h3><i class="fa-solid fa-users-gear"></i> Tài khoản nhân viên <span class="lz-muted">— mỗi tài khoản là một máy; chỉ sếp thấy phần này</span></h3>
+                            <h3><i class="fa-solid fa-users-gear"></i> Danh sách tài khoản đã cấp <span class="lz-muted">— mỗi tài khoản là một máy; chỉ sếp thấy phần này</span></h3>
                             <button type="button" class="btn-glow" id="flAccNew"><i class="fa-solid fa-user-plus"></i> Cấp tài khoản</button>
                         </div>
                         <div class="fl-acc-tools">
@@ -936,10 +937,10 @@
                             </div>
                         </div>
                         <div class="fl-tablewrap">
-                            <table class="fl-table"><thead><tr><th>Người dùng</th><th>Trạng thái</th><th>Đăng nhập gần nhất</th><th>IP gần nhất</th><th>Sản lượng</th><th>Thao tác</th></tr></thead>
+                            <table class="fl-table"><thead><tr><th>Tên đăng nhập</th><th>Tên hiển thị</th><th>Vai trò</th><th>Trạng thái</th><th>Ngày cấp</th><th>Thao tác</th></tr></thead>
                             <tbody id="flAccounts"><tr><td colspan="6" class="lz-muted">Chưa có tài khoản nào. Bấm "Cấp tài khoản".</td></tr></tbody></table>
                         </div>
-                        <div class="lz-muted" style="margin-top:8px;">Nhân viên nghỉ việc: bấm <b>Khoá</b> (giữ lịch sử, mở lại được) thay vì Xoá. Quên mật khẩu: bấm <b>Đặt mật khẩu</b> để tạo mật khẩu mới.</div>
+                        <div class="lz-muted" style="margin-top:8px;">Nhân viên nghỉ việc: bấm <b>Khoá</b> (giữ lịch sử, mở lại được) thay vì Xoá. Quên mật khẩu: bấm <b>Đổi mật khẩu</b> (tự gõ hoặc để trống cho Tool tạo ngẫu nhiên).</div>
                         <div id="flHubDenied" class="lz-muted" style="display:none;">Phần quản trị chỉ hiện khi mở trên máy chủ (localhost:5002) hoặc sau khi đăng nhập Cloudflare Access. Thử tải lại trang.</div>
                     </section>
 
