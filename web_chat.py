@@ -241,7 +241,10 @@ class WebChatSession:
 
     def new_chat(self):
         self._check_cancel()
-        self.page.goto(self.url, timeout=60000)
+        try:
+            self.page.goto(self.url, timeout=60000)
+        except Exception as e:
+            raise GeminiError(f"Không mở được trang {self.name} (mạng lỗi hoặc trang chặn). Chi tiết: {str(e)[:160]}")
         t0 = time.time()
         while time.time() - t0 < 45:
             self._check_cancel()

@@ -1087,6 +1087,7 @@ def api_localize_start():
         "extra": form.get("extra", "").strip(), "review": form.get("review") in ("1", "true", "on"),
         "chunk_size": chunk_size, "profile": (form.get("profileName") or "gemini_profile").strip() or "gemini_profile",
         "ai": web_chat.provider_of(form.get("ai")), "model": web_chat.get_model(form.get("ai")),
+        "ai_profile": web_chat.PROVIDERS[web_chat.provider_of(form.get("ai"))]["profile"],
         "thinking": gemini_client.get_thinking_level() if web_chat.provider_of(form.get("ai")) == "gemini" else "",
         "dry_run": form.get("dryRun") in ("1", "true", "on"),
         "zip": None, "current": None,
@@ -1181,8 +1182,10 @@ def api_localize_latest():
             except Exception:
                 continue
             k = "localize"
-            if d.get("engine") == "notebook":
+            if d.get("engine") in ("notebook", "ytchat"):
                 k = "youtube" if (d.get("nb") or {}).get("kind") == "youtube" else "notebook"
+            elif d.get("engine") == "aichat":
+                k = d.get("ai") or "chatgpt"
             if k != kind:
                 continue
         best, best_t = jid, t
@@ -1347,6 +1350,128 @@ def api_yt_run():
     _write_json(os.path.join(job_dir, "job.json"), job)
     _launch_job(job_id)
     return jsonify({"status": "success", "job_id": job_id, "units": len(arts)})
+
+
+# ======================================================================
+#  TAB RIÊNG CHATGPT / CLAUDE: hàng đợi nhiều mục, 1 câu lệnh mẫu, tuỳ chọn nhiều quốc gia
+# ======================================================================
+AI_TEMPLATES_FILE = os.path.join(APP_DIR, "ai_templates.json")
+AI_TEMPLATE_SEED = [
+    {"id": "viet-lai", "name": "Viết lại giữ ý (đa quốc gia)",
+     "prompt": "Viết lại bài dưới đây bằng {NGON_NGU} cho người đọc {QUOC_GIA}: giữ TOÀN BỘ ý và độ dài, văn phong tự nhiên "
+               "như người bản xứ, không tóm tắt, không thêm lời dẫn.\n\n{NOI_DUNG}"},
+    {"id": "hoan-thien", "name": "Hoàn thiện bản gốc (dấu câu, chia đoạn)",
+     "prompt": "Hoàn thiện văn bản dưới đây: thêm dấu câu, chia đoạn hợp lý, sửa lỗi chính tả và từ nghe nhầm. Giữ nguyên "
+               "toàn bộ nội dung và ngôn ngữ, không tóm tắt, không thêm lời dẫn.\n\n{NOI_DUNG}"},
+    {"id": "chu-de", "name": "Viết bài theo chủ đề",
+     "prompt": "Viết một bài hoàn chỉnh khoảng 1.500 từ về chủ đề: {NOI_DUNG}. Có tiêu đề, mở bài cuốn hút, các đoạn rõ ý, "
+               "kết bài. Chỉ trả về bài viết."},
+]
+
+
+def _ai_templates():
+    try:
+        return _read_json(AI_TEMPLATES_FILE)
+    except Exception:
+        return list(AI_TEMPLATE_SEED)
+
+
+@app.route("/api/aichat/templates", methods=["GET", "POST"])
+def api_aichat_templates():
+    tpls = _ai_templates()
+    if request.method == "POST":
+        d = request.get_json(silent=True) or {}
+        name, prompt = (d.get("name") or "").strip()[:80], (d.get("prompt") or "").strip()[:20000]
+        if d.get("delete"):
+            tpls = [t for t in tpls if t["id"] != d.get("id")]
+        else:
+            if not name or not prompt:
+                return jsonify({"status": "error", "message": "Cần tên và nội dung câu lệnh."}), 400
+            t = next((t for t in tpls if t["id"] == d.get("id")), None)
+            if t:
+                t.update(name=name, prompt=prompt)
+            else:
+                tpls.append({"id": uuid.uuid4().hex[:8], "name": name, "prompt": prompt})
+        _write_json(AI_TEMPLATES_FILE, tpls)
+    return jsonify({"status": "success", "templates": tpls})
+
+
+def _split_items(text, mode):
+    text = (text or "").replace("\r\n", "\n").strip()
+    if not text:
+        return []
+    if mode == "line":
+        return [l.strip() for l in text.split("\n") if l.strip()]
+    if mode == "all":
+        return [text]
+    return [b.strip() for b in re.split(r"\n\s*-{3,}\s*\n", "\n" + text + "\n") if b.strip()]
+
+
+@app.route("/api/aichat/run", methods=["POST"])
+def api_aichat_run():
+    if _active_job_id():
+        return jsonify({"status": "error", "message": "Đang có một job khác chạy. Đợi xong hoặc huỷ job đó trước.",
+                        "job_id": _active_job_id()}), 409
+    form = request.form
+    ai = form.get("ai") if form.get("ai") in ("chatgpt", "claude") else "chatgpt"
+    items = []
+    for i, t in enumerate(_split_items(form.get("items"), form.get("split") or "block"), start=1):
+        first = t.split("\n", 1)[0][:60]
+        items.append((_safe_name(first, f"muc_{i:02d}"), t))
+    for f in request.files.getlist("files[]"):
+        if f and f.filename:
+            t = _read_text_upload(f).strip()
+            if t:
+                items.append((_safe_name(f.filename, f"tep_{len(items) + 1:02d}"), t))
+    if not items:
+        return jsonify({"status": "error", "message": "Chưa có nội dung nào để chạy."}), 400
+    prompt = (form.get("prompt") or "").strip()
+    if not prompt:
+        return jsonify({"status": "error", "message": "Hãy nhập câu lệnh (hoặc chọn câu lệnh mẫu)."}), 400
+    try:
+        countries = [c for c in json.loads(form.get("countries") or "[]") if c and c != "SAME"]
+    except ValueError:
+        countries = []
+    valid = []
+    for c in countries:
+        try:
+            locales.get_country(c)
+            valid.append(c)
+        except KeyError:
+            pass
+    countries = valid or ["SAME"]
+    to_int = lambda v, d, lo, hi: max(lo, min(hi, int(v))) if str(v or "").strip().lstrip("-").isdigit() else d
+    job_id = uuid.uuid4().hex[:16]
+    job_dir = os.path.join(JOBS_DIR, job_id)
+    os.makedirs(os.path.join(job_dir, "sources"), exist_ok=True)
+    arts, used = [], set()
+    for i, (name, text) in enumerate(items, start=1):
+        n, k = name, 2
+        while n in used:
+            n, k = f"{name}_{k}", k + 1
+        used.add(n)
+        fname = f"a{i}.txt"
+        with open(os.path.join(job_dir, "sources", fname), "w", encoding="utf-8") as f:
+            f.write(text)
+        arts.append({"id": f"a{i}", "name": n, "file": fname, "chars": len(text)})
+    job = {
+        "id": job_id, "created_at": time.time(), "state": "queued", "error": "", "engine": "aichat", "ai": ai,
+        "aichat": {"prompt": prompt, "chat_mode": "same" if form.get("chatMode") == "same" else "new",
+                   "chunk": to_int(form.get("chunk"), 12000, 3000, 60000),
+                   "delay_min": to_int(form.get("delayMin"), 5, 0, 600), "delay_max": to_int(form.get("delayMax"), 15, 0, 900),
+                   "auto_continue": form.get("autoContinue") in ("1", "true", "on"), "retries": 2},
+        "base_name": _safe_name(form.get("customFilename"), "HangLoat"),
+        "articles": arts, "countries": countries,
+        "results": {f"{a['id']}:{c}": {"status": "pending"} for a in arts for c in countries},
+        "style_id": "", "style_text": "", "mode": "localize", "outline_use": "strict", "source_use": "fresh",
+        "audience": "", "length": "same", "keywords": "", "glossary": "", "extra": (form.get("extra") or "").strip(),
+        "review": False, "chunk_size": 12000, "profile": web_chat.PROVIDERS[ai]["profile"],
+        "model": web_chat.get_model(ai), "thinking": "", "dry_run": form.get("dryRun") in ("1", "true", "on"),
+        "zip": None, "current": None,
+    }
+    _write_json(os.path.join(job_dir, "job.json"), job)
+    _launch_job(job_id)
+    return jsonify({"status": "success", "job_id": job_id, "units": len(arts) * len(countries)})
 
 
 # ======================================================================

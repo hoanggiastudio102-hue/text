@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const target = document.getElementById(btn.getAttribute('data-tab'));
             target.classList.add('active');
             
-            if (target.id === 'tab-translate' || target.id === 'tab-localize') {
+            if (target.id === 'tab-translate' || target.id === 'tab-localize' || target.id === 'tab-chatgpt' || target.id === 'tab-claude') {
                 target.style.display = 'grid';
             } else {
                 target.style.display = 'block';

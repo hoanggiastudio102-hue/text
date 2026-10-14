@@ -35,6 +35,8 @@
             <button class="tab-btn" data-tab="tab-translate" hidden><i class="fa-solid fa-language"></i> Sáng Tạo Ngữ Đơn</button>
             <button class="tab-btn" data-tab="tab-batch" hidden><i class="fa-solid fa-layer-group"></i> Sáng Tạo Ngữ Hàng Loạt</button>
             <button class="tab-btn" data-tab="tab-creative" hidden><i class="fa-solid fa-wand-magic-sparkles"></i> Sáng Tạo</button>
+            <button class="tab-btn" data-tab="tab-chatgpt"><i class="fa-solid fa-comment-dots"></i> ChatGPT</button>
+            <button class="tab-btn" data-tab="tab-claude"><i class="fa-solid fa-asterisk"></i> Claude</button>
             <button class="tab-btn" data-tab="tab-yt"><i class="fa-brands fa-youtube"></i> YouTube → Text</button>
             <button class="tab-btn active" data-tab="tab-localize"><i class="fa-solid fa-earth-asia"></i> Tái Sáng Tạo Đa Quốc Gia</button>
             <button class="tab-btn" data-tab="tab-notebook"><i class="fa-solid fa-book-open"></i> NotebookLM</button>
@@ -669,6 +671,10 @@
         </div>
 
         <!-- YouTube -> văn bản chuẩn (NotebookLM) -->
+        <!-- Tab riêng ChatGPT / Claude (giao diện do static/aitab.js dựng) -->
+        <div id="tab-chatgpt" class="workspace tab-content" data-ai="chatgpt" style="display: none;"></div>
+        <div id="tab-claude" class="workspace tab-content" data-ai="claude" style="display: none;"></div>
+
         <div id="tab-yt" class="workspace tab-content" style="display: none;">
             <div class="card input-section">
                 <h2><i class="fa-brands fa-youtube"></i> YouTube → Văn bản chuẩn</h2>
@@ -1180,6 +1186,7 @@
     <script src="{{ url_for('static', filename='script.js') }}?v={{ asset_v }}"></script>
     <script src="{{ url_for('static', filename='localize.js') }}?v={{ asset_v }}"></script>
     <script src="{{ url_for('static', filename='ai.js') }}?v={{ asset_v }}"></script>
+    <script src="{{ url_for('static', filename='aitab.js') }}?v={{ asset_v }}"></script>
     <script src="{{ url_for('static', filename='fleet.js') }}?v={{ asset_v }}"></script>
     <script src="{{ url_for('static', filename='notebook.js') }}?v={{ asset_v }}"></script>
     <script src="{{ url_for('static', filename='yt.js') }}?v={{ asset_v }}"></script>

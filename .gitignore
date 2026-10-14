@@ -16,3 +16,4 @@ fleet_agent.json
 fleet_outbox.json
 logs/
 notebook_store.json
+ai_templates.json

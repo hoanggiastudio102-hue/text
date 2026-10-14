@@ -745,3 +745,9 @@ select.glass-input option {
 .ai-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .ai-acc { font-size: 12px; white-space: nowrap; line-height: 1.6; }
 .ai-tag { display: inline-block; min-width: 54px; font-size: 10px; padding: 1px 6px; border-radius: 6px; background: rgba(100,116,139,.2); color: #cbd5e1; text-align: center; }
+
+/* Tab riêng ChatGPT / Claude */
+.ai-topbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 13px; margin: -4px 0 10px; }
+.ai-cgrid { max-height: 220px; overflow: auto; }
+.ai-goto { color: #93c5fd; text-decoration: none; }
+.ai-goto:hover { text-decoration: underline; }

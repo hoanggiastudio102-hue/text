@@ -15,6 +15,7 @@ Cấu trúc job.json (rút gọn):
 """
 import argparse
 import json
+import random
 import os
 import re
 import shutil
@@ -768,6 +769,107 @@ class DryNotebook(DryRunSession):
 # ---------------------------------------------------------------------------
 # ĐÓNG GÓI
 # ---------------------------------------------------------------------------
+# TAB RIÊNG CHATGPT / CLAUDE: hàng đợi nhiều mục × (tuỳ chọn) nhiều quốc gia, 1 câu lệnh mẫu
+# ---------------------------------------------------------------------------
+AI_VARS = ("{NOI_DUNG}", "{TEN}", "{QUOC_GIA}", "{NGON_NGU}")
+
+
+def ai_prompt(cfg, article, code, part, i, n):
+    """Ghép câu lệnh mẫu của sếp với nội dung mục. Biến: {NOI_DUNG} {TEN} {QUOC_GIA} {NGON_NGU}."""
+    ac = cfg.get("aichat") or {}
+    tpl = (ac.get("prompt") or "").strip()
+    if code == "SAME":
+        country_name, lang = "", ""
+    else:
+        c = locales.get_country(code)
+        country_name, lang = c["name_vi"], VI_LANG.get(code, c["language"])
+    body = part if n == 1 else (f"(Nội dung dài nên gửi theo từng phần — đây là PHẦN {i}/{n}. Chỉ xử lý phần này, "
+                                f"đầy đủ từ câu đầu tới câu cuối, nối mạch với phần trước, không mở đầu/kết luận riêng.)\n\n"
+                                + part)
+    p = (tpl.replace("{TEN}", article["name"]).replace("{QUOC_GIA}", country_name).replace("{NGON_NGU}", lang))
+    if "{NOI_DUNG}" in p:
+        p = p.replace("{NOI_DUNG}", body)
+    elif part:
+        p = (p + "\n\n" if p else "") + f"NỘI DUNG:\n<<<\n{body}\n>>>"
+    if code != "SAME" and "{QUOC_GIA}" not in tpl and "{NGON_NGU}" not in tpl:
+        p += f"\n\nViết toàn bộ bằng {lang}, tự nhiên như người {country_name} viết. {country_name}"
+    if (cfg.get("extra") or "").strip():
+        p += "\nYêu cầu thêm: " + cfg["extra"].strip()
+    return p
+
+
+def process_unit_ai(job, session, article, code):
+    cfg = job.data
+    ac = cfg.get("aichat") or {}
+    res = cfg["results"][rkey(article["id"], code)]
+    with open(os.path.join(job.dir, "sources", article["file"]), "r", encoding="utf-8") as f:
+        src = f.read().strip()
+    size = int(ac.get("chunk") or 12000)
+    parts = locales.split_text(src, size) if len(src) > size * 1.2 else [src]
+    res.update(status="running", started_at=time.time(), chunks_total=len(parts), chunks_done=0, error="")
+    cfg["current"] = {"article": article["id"], "code": code}
+    job.save()
+    tag = "" if code == "SAME" else f" → {locales.get_country(code)['name_vi']}"
+    job.log(f"▶ [{article['name']}]{tag}" + (f" — {len(parts)} phần" if len(parts) > 1 else ""))
+    mcode = "VN" if code == "SAME" else code
+    outs = []
+    who = getattr(session, "name", "AI")
+    for i, part in enumerate(parts, start=1):
+        prompt = ai_prompt(cfg, article, code, part, i, len(parts))
+        t, err = "", None
+        for attempt in range(1, int(ac.get("retries") or 2) + 1):
+            try:
+                job.log(f"   phần {i}/{len(parts)}: gửi {who}{' (thử lại)' if attempt > 1 else ''}…"
+                        if len(parts) > 1 or attempt > 1 else f"   gửi {who}…")
+                t = session.ask(prompt)
+                if not t.strip():
+                    raise GeminiError("AI trả về nội dung rỗng.")
+                err = None
+                break
+            except (GeminiLimitError, GeminiCancelled):
+                raise
+            except Exception as e:
+                err = e
+                job.log(f"   ⚠️ {str(e)[:160]}")
+                time.sleep(5)
+                try:
+                    session.new_chat()     # chat hỏng -> mở chat mới rồi gửi lại
+                except GeminiError:
+                    pass
+        if err is not None:
+            raise err if isinstance(err, GeminiError) else GeminiError(str(err))
+        # trả lời bị cụt (bài viết lại/dịch mà ngắn hơn hẳn bản gốc) -> nhắn "Tiếp tục"
+        if ac.get("auto_continue", True) and len(part) > 1500:
+            want = locales.target_units(part, mcode, 0.75)[0]
+            for rnd in range(1, 4):
+                if locales.measure(t, mcode) >= want:
+                    break
+                job.log(f"   ↪ trả lời có vẻ bị cụt — nhắn 'Tiếp tục' ({rnd}/3)…")
+                last = t.strip()[-160:].replace("\n", " ")
+                more = session.ask(f"Tiếp tục từ ĐÚNG chỗ vừa dừng (ngay sau đoạn: \"…{last}\"). Không lặp lại phần đã "
+                                   "viết, không lời dẫn. Nếu đã viết hết thì chỉ trả lời đúng một từ: HẾT")
+                if re.fullmatch(r"\W*(HẾT|HET|END|DONE)\W*", more.strip(), re.I) or len(more.strip()) < 40:
+                    break
+                merged = merge_continuation(t, more)
+                if len(merged) <= len(t) + 40:
+                    break
+                t = merged
+            t = re.sub(r"\n?\s*\bHẾT\W*$", "", t.strip()).strip()
+        outs.append(t.strip())
+        res["chunks_done"] = i
+        job.save()
+    text = "\n\n".join(o for o in outs if o)
+    fname = f"{article['name']}.txt" if code == "SAME" else f"{article['name']}_{code}.txt"
+    art_dir = os.path.join(job.files_dir, article["id"])
+    os.makedirs(art_dir, exist_ok=True)
+    with open(os.path.join(art_dir, fname), "w", encoding="utf-8") as f:
+        f.write(text + "\n")
+    res.update(status="done", file=f"{article['id']}/{fname}", chars=len(text), finished_at=time.time())
+    job.save()
+    job.log(f"✅ Xong [{article['name']}]{tag}: {len(text):,} ký tự -> {fname}")
+
+
+# ---------------------------------------------------------------------------
 def finalize(job):
     cfg = job.data
     done = [(k, r) for k, r in cfg["results"].items() if r.get("status") == "done" and r.get("file")]
@@ -783,7 +885,9 @@ def finalize(job):
             cfg["history_files"] = [name]
         else:
             multi = len(cfg["articles"]) > 1
-            tag = "Text" if (cfg.get("nb") or {}).get("kind") == "youtube" else "BanDia"
+            tag = ("Text" if (cfg.get("nb") or {}).get("kind") == "youtube" else
+                   {"chatgpt": "ChatGPT", "claude": "Claude"}.get(cfg.get("ai"), "BanDia") if cfg.get("engine") == "aichat"
+                   else "BanDia")
             zip_name = f"{cfg['base_name']}_{tag}_{cfg['id'][:6]}.zip"
             with zipfile.ZipFile(os.path.join(OUTPUT_FOLDER, zip_name), "w", zipfile.ZIP_DEFLATED) as z:
                 for k, r in done:
@@ -803,7 +907,7 @@ def finalize(job):
             secs = int(time.time() - cfg.get("started_at", time.time()))
             try:
                 import gemini_client
-                a = gemini_client.load_accounts().get(cfg.get("profile") or "gemini_profile") or {}
+                a = gemini_client.load_accounts().get(cfg.get("ai_profile") or cfg.get("profile") or "gemini_profile") or {}
                 acct = " ".join(x for x in (a.get("name"), "(" + a["email"] + ")" if a.get("email") else "") if x)
             except Exception:
                 acct = ""
@@ -899,6 +1003,23 @@ def run_job(job_dir, session_factory=None):
                     break
                 key = rkey(article["id"], code)
                 try:
+                    if cfg.get("engine") == "aichat":
+                        ac = cfg.get("aichat") or {}
+                        if not first:
+                            lo, hi = int(ac.get("delay_min") or 0), int(ac.get("delay_max") or 0)
+                            if hi > 0:
+                                wait = random.uniform(lo, max(lo, hi))
+                                job.log(f"   ⏸ nghỉ {wait:.0f} giây trước mục kế (tránh bị giới hạn)…")
+                                t_end = time.time() + wait
+                                while time.time() < t_end and not job.cancelled():
+                                    time.sleep(1)
+                                    job.beat()
+                            if ac.get("chat_mode") != "same":
+                                session.new_chat()
+                        first = False
+                        process_unit_ai(job, session, article, code)
+                        job.save()
+                        continue
                     if is_nb:
                         if getattr(session, "article_id", None) != article["id"]:
                             nb_open_article(job, session, article)
