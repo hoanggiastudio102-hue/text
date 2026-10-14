@@ -26,13 +26,8 @@ def run(source_lang="auto", target_lang="en", gdoc_url="", text_file="", profile
 
     with sync_playwright() as p:
         try:
-            browser = p.chromium.launch_persistent_context(
-                user_data_dir,
-                channel="chrome",
-                headless=False,
-                accept_downloads=True,
-                args=["--disable-blink-features=AutomationControlled"]
-            )
+            from gemini_client import launch_browser
+            browser = launch_browser(p, user_data_dir, headless=False)
         except Exception as e:
             print(f"❌ LỖI KHỞI ĐỘNG TRÌNH DUYỆT: {e}")
             return

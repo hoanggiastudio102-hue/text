@@ -22,8 +22,8 @@ def main():
     a = ap.parse_args()
     udir = os.path.join(BASE, "profiles", a.profile)
     with sync_playwright() as p:
-        ctx = p.chromium.launch_persistent_context(udir, channel="chrome", headless=False,
-                                                   args=["--disable-blink-features=AutomationControlled"])
+        from gemini_client import launch_browser
+        ctx = launch_browser(p, udir, headless=False)
         try:
             page = ctx.pages[0] if ctx.pages else ctx.new_page()
             page.goto("https://notebooklm.google.com/", timeout=60000)

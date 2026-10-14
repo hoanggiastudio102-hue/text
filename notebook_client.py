@@ -146,9 +146,8 @@ class NotebookSession:
         self.log(f"Đang mở trình duyệt (NotebookLM) với tài khoản: {self.profile_name}")
         self._pw = sync_playwright().start()
         try:
-            self.ctx = self._pw.chromium.launch_persistent_context(
-                user_data_dir, channel="chrome", headless=self.headless, accept_downloads=True,
-                args=["--disable-blink-features=AutomationControlled"])
+            from gemini_client import launch_browser
+            self.ctx = launch_browser(self._pw, user_data_dir, headless=self.headless, log=self.log)
         except Exception as e:
             self.close()
             raise GeminiError(

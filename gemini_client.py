@@ -63,6 +63,19 @@ def get_thinking_level():
 # ---------------------------------------------------------------------------
 # TÀI KHOẢN GEMINI ĐANG ĐĂNG NHẬP (lưu theo profile, chỉ để hiển thị)
 # ---------------------------------------------------------------------------
+def launch_browser(pw, user_data_dir, headless=False, log=print):
+    """Mở Chrome thật (channel 'chrome'); máy không cài Google Chrome (VD: Mac mới) thì dùng Chromium đi kèm Playwright."""
+    kw = dict(headless=headless, accept_downloads=True, args=["--disable-blink-features=AutomationControlled"])
+    try:
+        return pw.chromium.launch_persistent_context(user_data_dir, channel="chrome", **kw)
+    except Exception as e:
+        m = str(e).lower()
+        if "distribution 'chrome' is not found" in m or ("chrome" in m and ("not found" in m or "executable" in m)):
+            log("Không thấy Google Chrome trên máy — dùng Chromium đi kèm (nên cài Google Chrome để đăng nhập Google ổn định).")
+            return pw.chromium.launch_persistent_context(user_data_dir, **kw)
+        raise
+
+
 ACCOUNT_FILE = os.path.join(BASE_DIR, "gemini_account.json")
 
 _JS_ACCOUNT = r"""
@@ -316,9 +329,7 @@ class GeminiSession:
         self.log(f"Đang mở trình duyệt với tài khoản: {self.profile_name}")
         self._pw = sync_playwright().start()
         try:
-            self.ctx = self._pw.chromium.launch_persistent_context(
-                user_data_dir, channel="chrome", headless=self.headless, accept_downloads=True,
-                args=["--disable-blink-features=AutomationControlled"])
+            self.ctx = launch_browser(self._pw, user_data_dir, headless=self.headless, log=self.log)
         except Exception as e:
             self.close()
             raise GeminiError(

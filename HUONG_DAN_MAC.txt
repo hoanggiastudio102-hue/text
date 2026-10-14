@@ -1,0 +1,29 @@
+HƯỚNG DẪN CÀI AUTO CONTENT GEMINI TRÊN MAC
+==========================================
+
+CHUẨN BỊ (1 lần)
+1. Cài Google Chrome: https://www.google.com/chrome/  (Tool dùng Chrome để mở Gemini/NotebookLM.
+   Không có Chrome thì Tool dùng Chromium dự phòng, nhưng Google hay chặn đăng nhập trên Chromium.)
+2. Giải nén file ZIP vào một thư mục cố định, ví dụ: Tài liệu (Documents) > AutoContentGemini.
+   Không để trong Downloads rồi xoá nhầm.
+
+CÀI ĐẶT (1 lần, cần mạng, khoảng 3-5 phút)
+3. Trong thư mục vừa giải nén, bấm CHUỘT PHẢI vào  Cai_dat_Mac.command  > Mở (Open) > Mở (Open).
+   - Nếu Mac báo "không thể xác minh nhà phát triển" và không có nút Mở:
+     vào Cài đặt hệ thống (System Settings) > Quyền riêng tư & Bảo mật (Privacy & Security),
+     kéo xuống, bấm "Vẫn mở" (Open Anyway) cho Cai_dat_Mac.command, rồi chạy lại.
+   - Nếu Mac hỏi cho Terminal truy cập thư mục Tài liệu: bấm Cho phép (Allow).
+4. Đợi cửa sổ Terminal chạy xong 4 bước. Tool tự mở trên trình duyệt: http://localhost:5002
+
+LẦN ĐẦU DÙNG
+5. Bấm nút "Đăng nhập" (góc phải trên) > đăng nhập tài khoản Google được giao > TẮT cửa sổ đăng nhập.
+6. Tab "Đội Máy" > nhập địa chỉ máy chủ + tài khoản/mật khẩu sếp cấp để máy báo cáo về sếp.
+
+HẰNG NGÀY
+- Mở Tool:  bấm đúp  Chay_ngam_Mac.command   (chạy ngầm, đóng cửa sổ Terminal vẫn chạy)
+- Tắt Tool: bấm đúp  Dung_ngam_Mac.command
+- Trang Tool: http://localhost:5002   (nên lưu dấu trang)
+- Lỗi thì gửi sếp file  logs/server.log  trong thư mục Tool.
+
+Tuỳ chọn: tự mở Tool khi bật máy — Cài đặt hệ thống > Cài đặt chung > Mục đăng nhập (Login Items) >
+bấm "+" và chọn Chay_ngam_Mac.command.
