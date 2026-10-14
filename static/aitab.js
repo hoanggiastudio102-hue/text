@@ -282,6 +282,7 @@
                 $('PreviewBox').style.display = 'block'; $('PreviewTitle').textContent = title; $('PreviewText').value = d.text;
                 $('PreviewDl').href = `/api/localize/${jobId}/file?f=${encodeURIComponent(file)}`;
                 $('PreviewDl').setAttribute('download', file.split('/').pop());
+                if (window.peBind) window.peBind(P, jobId, file, title, () => showResult(file, title));
                 if (window.showReview) window.showReview($('ReviewBox'), jobId, file);
                 poll();
             } catch (e) { toast('Lỗi kết nối tới máy chủ', true); }

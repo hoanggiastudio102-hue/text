@@ -918,7 +918,8 @@ def process_unit_ai(job, session, article, code):
 
 
 # ---------------------------------------------------------------------------
-def finalize(job):
+def build_outputs(job):
+    """Ghép file kết quả của job ra thư mục outputs (1 file .txt hoặc 1 ZIP). Dùng lại khi sếp sửa đoạn rồi lưu."""
     cfg = job.data
     done = [(k, r) for k, r in cfg["results"].items() if r.get("status") == "done" and r.get("file")]
     arts = {a["id"]: a for a in cfg["articles"]}
@@ -949,6 +950,13 @@ def finalize(job):
                                 (f"{arts[aid]['name']}/" if multi else "") + "ra_soat/" + os.path.basename(rep))
             cfg["zip"] = zip_name
             cfg["history_files"] = [zip_name]
+    return done
+
+
+def finalize(job):
+    cfg = job.data
+    done = build_outputs(job)
+    if done:
         try:  # thời gian xử lý hiện trong tab Lịch Sử
             meta_path = os.path.join(OUTPUT_FOLDER, "metadata.json")
             meta = read_json(meta_path) if os.path.exists(meta_path) else {}

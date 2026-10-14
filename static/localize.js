@@ -537,6 +537,7 @@
             const dl = $('lzPreviewDl');
             dl.href = `/api/localize/${jobId}/file?f=${encodeURIComponent(file)}`;
             dl.setAttribute('download', file.split('/').pop());
+            if (window.peBind) window.peBind('lz', jobId, file, title, () => showResult(file, title));
             if (window.showReview) window.showReview($('lzReviewBox'), jobId, file);
             poll();
             $('lzPreviewBox').scrollIntoView({ behavior: 'smooth', block: 'nearest' });

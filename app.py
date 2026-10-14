@@ -1201,6 +1201,158 @@ def api_localize_text(job_id):
         return jsonify({"status": "success", "text": f.read()})
 
 
+# ---------------- SỬA TỪNG ĐOẠN: dò đoạn cần viết lại, nhờ AI khác viết lại / dán tay, ghép thành file hoàn thiện
+_PARA_PROCS = {}
+
+
+def _para_busy():
+    """Có tác vụ 'AI viết lại đoạn' đang chạy không (tránh mở trùng Chrome)."""
+    for tid, (proc, out) in list(_PARA_PROCS.items()):
+        if proc.poll() is None:
+            return tid
+        _PARA_PROCS.pop(tid, None)
+    return None
+
+
+def _para_flags(job_dir, data, rel, paras):
+    """{chỉ số đoạn: [lý do]} — từ báo cáo Viết chuyên gia (chỗ chưa sửa) + máy dò văn AI / lệch so với bài gốc."""
+    import expert
+    import review_check as rc
+    flags = {}
+    r = next((r for r in (data.get("results") or {}).values() if r.get("file") == rel), {}) or {}
+    for it in r.get("review_items") or []:
+        if it.get("applied") or not it.get("p"):
+            continue
+        k = int(it["p"]) - 1
+        old = (it.get("old") or "").strip()
+        if old and not (0 <= k < len(paras) and paras[k].startswith(old[:60])):
+            k = next((x for x, p in enumerate(paras) if p.startswith(old[:60])), k)
+        if 0 <= k < len(paras):
+            flags.setdefault(k, []).append(f"{it.get('step')}: {it.get('issue')}")
+    for k, v in expert.ai_signs(paras).items():
+        if not any("văn AI" in x for x in flags.get(k, [])):
+            flags.setdefault(k, []).append("dấu hiệu văn AI: " + ", ".join(v))
+    try:
+        aid = rel.split("/", 1)[0]
+        art = next((a for a in data.get("articles", []) if a["id"] == aid), None)
+        code = rel.rsplit("_", 1)[-1].replace(".txt", "") if "_" in rel else "SAME"
+        if art and data.get("engine") in (None, "", "aichat", "notebook") and art.get("file"):
+            with open(os.path.join(job_dir, "sources", art["file"]), "r", encoding="utf-8") as f:
+                src = f.read()
+            for k, v in rc.machine_flags(rc.paragraphs(src), paras, code if re.fullmatch(r"[A-Z]{2}", code) else "SAME").items():
+                flags.setdefault(k, []).extend(v)
+    except Exception:
+        pass
+    return {str(k): list(dict.fromkeys(v)) for k, v in flags.items()}
+
+
+@app.route("/api/para/<job_id>")
+def api_para_get(job_id):
+    import review_check as rc
+    d = _job_dir(job_id)
+    rel = request.args.get("f") or ""
+    path = _safe_path(os.path.join(d, "files"), rel, 2) if d else None
+    if not path:
+        return jsonify({"status": "error", "message": "Không tìm thấy file."}), 404
+    with open(path, "r", encoding="utf-8") as f:
+        paras = rc.paragraphs(f.read())
+    data = _read_json(os.path.join(d, "job.json"))
+    return jsonify({"status": "success", "paras": paras, "flags": _para_flags(d, data, rel, paras),
+                    "edited": bool(os.path.exists(path + ".ban_dau"))})
+
+
+@app.route("/api/para/<job_id>/rewrite", methods=["POST"])
+def api_para_rewrite(job_id):
+    d = _job_dir(job_id)
+    body = request.get_json(silent=True) or {}
+    rel = body.get("f") or ""
+    if not d or not _safe_path(os.path.join(d, "files"), rel, 2):
+        return jsonify({"status": "error", "message": "Không tìm thấy file."}), 404
+    if _active_job_id():
+        return jsonify({"status": "error", "message": "Đang có job chạy — đợi job xong rồi nhờ AI viết lại "
+                                                       "(hoặc dùng 'Copy câu lệnh' / sửa tay)."}), 409
+    if _para_busy():
+        return jsonify({"status": "error", "message": "Đang có một lượt AI viết lại khác, đợi xong đã."}), 409
+    ai = body.get("ai") if body.get("ai") in ("gemini", "chatgpt", "claude") else "chatgpt"
+    paras = [str(p) for p in (body.get("paras") or [])][:2000]
+    idxs = [int(i) for i in (body.get("idxs") or []) if str(i).isdigit()][:40]
+    if not paras or not idxs:
+        return jsonify({"status": "error", "message": "Chưa chọn đoạn nào."}), 400
+    tid = uuid.uuid4().hex[:10]
+    tdir = os.path.join(d, "parafix")
+    os.makedirs(tdir, exist_ok=True)
+    tpath = os.path.join(tdir, tid + ".json")
+    _write_json(tpath, {"job_dir": d, "file": rel, "idxs": idxs, "ai": ai, "note": str(body.get("note") or "")[:2000],
+                        "paras": paras})
+    proc = subprocess.Popen([sys.executable, os.path.join(APP_DIR, "para_fix.py"), tpath], cwd=APP_DIR,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    _PARA_PROCS[tid] = (proc, tpath[:-5] + ".out.json")
+    return jsonify({"status": "success", "task": tid})
+
+
+@app.route("/api/para/<job_id>/task/<tid>")
+def api_para_task(job_id, tid):
+    d = _job_dir(job_id)
+    if not d or not re.match(r"^[0-9a-f]{10}$", tid or ""):
+        return jsonify({"status": "error", "message": "Sai yêu cầu."}), 400
+    out = os.path.join(d, "parafix", tid + ".out.json")
+    try:
+        data = _read_json(out)
+    except Exception:
+        data = {"state": "starting", "results": {}, "log": ["Đang mở trình duyệt…"]}
+    proc = (_PARA_PROCS.get(tid) or (None, None))[0]
+    if data.get("state") == "running" and proc is not None and proc.poll() is not None:
+        data["state"] = "error"
+        data["error"] = "Tiến trình viết lại dừng bất ngờ."
+    return jsonify({"status": "success", **data})
+
+
+@app.route("/api/para/<job_id>/save", methods=["POST"])
+def api_para_save(job_id):
+    """Ghép các đoạn (đã thay) thành file hoàn thiện; giữ bản đầu (.ban_dau); ghi lịch sử sửa vào báo cáo; ghép lại ZIP."""
+    import localize_bot as lb
+    d = _job_dir(job_id)
+    body = request.get_json(silent=True) or {}
+    rel = body.get("f") or ""
+    path = _safe_path(os.path.join(d, "files"), rel, 2) if d else None
+    if not path:
+        return jsonify({"status": "error", "message": "Không tìm thấy file."}), 404
+    if _active_job_id() == job_id:
+        return jsonify({"status": "error", "message": "Job này đang chạy, đợi xong rồi lưu."}), 409
+    paras = [str(p).strip() for p in (body.get("paras") or []) if str(p).strip()]
+    if not paras:
+        return jsonify({"status": "error", "message": "Bài trống."}), 400
+    if not os.path.exists(path + ".ban_dau"):
+        shutil.copyfile(path, path + ".ban_dau")
+    text = "\n\n".join(re.sub(r"\s*\n\s*", " ", p) for p in paras)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text + "\n")
+    job = lb.Job(d)
+    r = next((r for r in job.data.get("results", {}).values() if r.get("file") == rel), None)
+    changes = body.get("changes") or []
+    if r is not None:
+        r["chars"] = len(text)
+        r["edited_at"] = time.time()
+        rep_rel = r.get("report") or re.sub(r"\.txt$", "", rel) + "_ra_soat.txt"
+        rep_path = _safe_path(os.path.join(d, "files"), rep_rel, 2) or os.path.join(d, "files", rep_rel)
+        lines = [f"\n--- SỬA TỪNG ĐOẠN lúc {time.strftime('%d/%m/%Y %H:%M')} ({len(changes)} đoạn) ---"]
+        for c in changes[:200]:
+            lines += [f"■ Đoạn {c.get('p')} — {c.get('by') or 'sửa tay'}",
+                      f"  TRƯỚC: {str(c.get('old') or '')[:1500]}", f"  SAU  : {str(c.get('new') or '')[:1500]}", ""]
+        with open(rep_path, "a", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+        r["report"] = rep_rel
+        for it in r.get("review_items") or []:      # chỗ sếp đã sửa thì không còn "cần xem"
+            if not it.get("applied") and any(str(c.get("old") or "").startswith((it.get("old") or "")[:60]) for c in changes
+                                             if it.get("old")):
+                it["applied"] = True
+                it["issue"] = (it.get("issue") or "") + " (sếp đã sửa)"
+    lb.build_outputs(job)
+    job.save()
+    return jsonify({"status": "success", "chars": len(text), "zip": job.data.get("zip"),
+                    "history": job.data.get("history_files")})
+
+
 @app.route("/api/localize/latest")
 def api_localize_latest():
     """Job gần nhất theo loại (localize | notebook | youtube) để mỗi tab tự nối lại tiến độ sau khi tải lại trang."""

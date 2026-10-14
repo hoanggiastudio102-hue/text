@@ -164,6 +164,7 @@
             const dl = $('ytPreviewDl');
             dl.href = `/api/localize/${jobId}/file?f=${encodeURIComponent(file)}`;
             dl.setAttribute('download', file.split('/').pop());
+            if (window.peBind) window.peBind('yt', jobId, file, title, () => showResult(file, title));
             poll();
             $('ytPreviewBox').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         } catch (e) { toast('Lỗi kết nối tới máy chủ', true); }
