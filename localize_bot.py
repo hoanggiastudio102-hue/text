@@ -496,8 +496,13 @@ def yt_prompt(cfg, article, code):
         country = locales.get_country(code)
         lang_line = (f"- Viết toàn bộ bằng {VI_LANG.get(code, country['language'])}, văn phong tự nhiên như người "
                      f"{country['name_vi']} viết (không dịch word-by-word).")
-    p = (f"Nguồn \"{article['name']}\" là bản chép lời (phụ đề) của một video YouTube. " + style + "\n" + lang_line +
-         "\n- Chỉ trả về văn bản kết quả, không lời dẫn, không ghi chú, không tóm tắt ở cuối.")
+    custom = (nb.get("custom_prompt") or "").strip()
+    if custom:   # câu lệnh ngắn của sếp (như làm tay), Tool chỉ thêm tên nguồn + ngôn ngữ
+        p = (f"Nguồn \"{article['name']}\" là bản chép lời (phụ đề) của một video YouTube.\n" + custom +
+             ("" if code == "SAME" else "\n" + lang_line))
+    else:
+        p = (f"Nguồn \"{article['name']}\" là bản chép lời (phụ đề) của một video YouTube. " + style + "\n" + lang_line +
+             "\n- Chỉ trả về văn bản kết quả, không lời dẫn, không ghi chú, không tóm tắt ở cuối.")
     if (cfg.get("extra") or "").strip():
         p += "\nYêu cầu thêm: " + cfg["extra"].strip()
     return p
@@ -548,7 +553,7 @@ def yt_open_article(job, session, article):
         up_dir = os.path.join(job.dir, "upload")
         os.makedirs(up_dir, exist_ok=True)
         path = os.path.join(up_dir, f"{article['name']}.txt")
-        parts = split_plain(text, YT_PART_CHARS)
+        parts = split_plain(text, yt_part_size(cfg))
         with open(path, "w", encoding="utf-8") as f:
             if len(parts) > 1:   # video dài: đánh dấu từng phần ngay trong nguồn để hỏi theo phần bằng lệnh ngắn
                 f.write("\n\n".join(f"{yt_marker(i, len(parts))}\n{p}" for i, p in enumerate(parts, start=1)))
@@ -560,7 +565,13 @@ def yt_open_article(job, session, article):
     session.article_id = article["id"]
 
 
-YT_PART_CHARS = 12000
+YT_PART_CHARS = 12000                                          # dùng cho cách chạy "Đầy đủ"
+YT_PART_BY_MODE = {"fast": 10 ** 9, "auto": 30000, "full": None}    # None = YT_PART_CHARS
+
+
+def yt_part_size(cfg):
+    v = YT_PART_BY_MODE.get(((cfg.get("nb") or {}).get("yt_mode") or "auto"), 30000)
+    return YT_PART_CHARS if v is None else v
 
 
 def yt_marker(i, n):
@@ -630,7 +641,7 @@ def process_unit_yt(job, session, article, code):
     mcode = yt_util.lang_to_code(article.get("lang")) if code == "SAME" else code
     lang = "văn bản" if code == "SAME" else VI_LANG.get(code, code)
     base = yt_prompt(cfg, article, code)
-    parts = split_plain(src, YT_PART_CHARS) if src else [None]
+    parts = split_plain(src, yt_part_size(cfg)) if src else [None]
     res["chunks_total"] = len(parts)
     job.save()
     if len(parts) > 1:

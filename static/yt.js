@@ -34,6 +34,14 @@
         return ids.size;
     }
     $('ytLinks').addEventListener('input', countLinks);
+    try {
+        const sv = JSON.parse(localStorage.getItem('yt_prefs') || '{}');
+        if (sv.mode) $('ytMode').value = sv.mode;
+        if (sv.prompt) $('ytPrompt').value = sv.prompt;
+    } catch (e) { /* bỏ qua */ }
+    const savePrefs = () => { try { localStorage.setItem('yt_prefs', JSON.stringify({ mode: $('ytMode').value, prompt: $('ytPrompt').value })); } catch (e) { /* bỏ qua */ } };
+    $('ytMode').addEventListener('change', savePrefs);
+    $('ytPrompt').addEventListener('input', savePrefs);
 
     async function loadLangs() {
         try {
@@ -61,6 +69,8 @@
         const fd = new FormData();
         fd.append('links', $('ytLinks').value);
         fd.append('style', $('ytStyle').value);
+        fd.append('mode', $('ytMode').value);
+        fd.append('prompt', $('ytPrompt').value);
         fd.append('lang', $('ytLang').value);
         fd.append('extra', $('ytExtra').value);
         fd.append('customFilename', $('ytName').value);

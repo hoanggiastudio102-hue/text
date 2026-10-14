@@ -671,6 +671,18 @@
                         <textarea id="ytLinks" class="glass-input" rows="8" placeholder="https://www.youtube.com/watch?v=...&#10;https://youtu.be/...&#10;https://www.youtube.com/shorts/..."></textarea>
                     </div>
                     <div class="form-group">
+                        <label for="ytMode"><span><i class="fa-solid fa-gauge-high"></i> Cách chạy</span></label>
+                        <select id="ytMode" class="glass-input">
+                            <option value="auto">Tự động (khuyên dùng) — video ngắn 1 lệnh; video dài chia vài phần lớn cho đủ ý</option>
+                            <option value="fast">Nhanh — 1 lệnh duy nhất như làm tay (video rất dài có thể bị thiếu đoạn cuối)</option>
+                            <option value="full">Đầy đủ nhất — chia nhiều phần nhỏ (chậm hơn, chắc chắn đủ)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="ytPrompt"><span><i class="fa-solid fa-terminal"></i> Câu lệnh của sếp (tuỳ chọn — để trống dùng câu lệnh mặc định theo Kiểu văn bản)</span></label>
+                        <textarea id="ytPrompt" class="glass-input" rows="3" placeholder="VD: Hoàn thiện bản gốc: thêm dấu câu, chia đoạn, sửa lỗi chính tả, giữ nguyên toàn bộ nội dung, không tóm tắt."></textarea>
+                    </div>
+                    <div class="form-group">
                         <label for="ytStyle"><span><i class="fa-solid fa-pen-nib"></i> Kiểu văn bản</span></label>
                         <select id="ytStyle" class="glass-input">
                             <option value="clean">Văn bản chuẩn — giữ nguyên lời nói, thêm dấu câu, chia đoạn, bỏ từ đệm</option>
