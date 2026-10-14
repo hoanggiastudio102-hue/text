@@ -34,6 +34,7 @@ RX_UPLOAD = re.compile(r"Tải tệp lên|Upload files?", re.I)
 RX_NB_MENU = re.compile(r"Cấu hình sổ ghi chú|Notebook (settings|configuration)|Configure notebook|More options", re.I)
 RX_CHAT_CFG = re.compile(r"Định cấu hình cuộc trò chuyện|Configure chat", re.I)
 QUERY_BOX = '[aria-label="Hộp truy vấn"], [aria-label="Query box"]'
+CHAT_MAX = 7000      # lệnh dài hơn thì đưa vào nguồn (ô chat NotebookLM khoá nút Gửi khi quá dài)
 
 # Quy tắc chung đặt vào "Định cấu hình cuộc trò chuyện > Tuỳ chỉnh" của mỗi sổ (giới hạn 10.000 ký tự).
 BASE_CHAT_RULES = (
@@ -478,6 +479,42 @@ class NotebookSession:
         except Exception:
             return -1
 
+    def _send_disabled(self):
+        """Nút Gửi của ô chat bị khoá (thường do lệnh quá dài)."""
+        try:
+            return bool(self.page.locator(QUERY_BOX).first.evaluate("""e => {
+                let p = e;
+                for (let i = 0; i < 6 && p; i++, p = p.parentElement) {
+                    const b = Array.from(p.querySelectorAll('button')).find(x =>
+                        /^(Gửi|Submit|Send)$/i.test((x.getAttribute('aria-label') || '').trim()));
+                    if (b) return b.disabled || b.getAttribute('aria-disabled') === 'true';
+                }
+                return false;
+            }"""))
+        except Exception:
+            return False
+
+    def _send_via_source(self, full):
+        """Lệnh dài: đưa nguyên lệnh vào 1 nguồn rồi gửi chỉ dẫn ngắn trong chat."""
+        page = self.page
+        self._cmd += 1
+        tag = f"[LỆNH #{self._cmd}]"
+        self.log(f"   (lệnh dài {len(full):,} ký tự — đưa vào nguồn {tag})")
+        try:
+            page.locator(QUERY_BOX).first.fill("")
+        except Exception:
+            pass
+        self._add_source(tag + "\n" + full)
+        self._wait_chat_ready()
+        short = (("" if self.custom_ok else PROMPT_RULES) +
+                 f"Thực hiện đầy đủ, chính xác chỉ dẫn trong nguồn có dòng đầu là {tag} (nguồn mới nhất). "
+                 f"Chỉ trả về kết quả hoàn chỉnh.")
+        box = page.locator(QUERY_BOX).first
+        box.click()
+        box.fill(short)
+        time.sleep(0.5)
+        page.keyboard.press("Enter")
+
     def ask(self, prompt, timeout=1500, first_token_timeout=240):
         self._check_cancel()
         page = self.page
@@ -492,21 +529,17 @@ class NotebookSession:
         before = len(page.query_selector_all(ANSWER_SEL))
 
         box.click()
-        box.fill(full)
-        time.sleep(0.8)
-        if self._typed_len(box) < len(full) * 0.98:
-            # Ô chat cắt bớt chữ (quá dài): đưa nguyên lệnh vào làm 1 nguồn rồi chỉ dẫn ngắn gọn trong chat.
-            self._cmd += 1
-            tag = f"[LỆNH #{self._cmd}]"
-            self.log(f"   (lệnh dài {len(full):,} ký tự — đưa vào nguồn {tag})")
-            self._add_source(tag + "\n" + full)
-            short = (f"{PROMPT_RULES}Thực hiện đầy đủ, chính xác chỉ dẫn trong nguồn có dòng đầu là {tag} "
-                     f"(nguồn mới nhất). Chỉ trả về bản viết hoàn chỉnh.")
-            box = page.locator(QUERY_BOX).first
-            box.click()
-            box.fill(short)
-            time.sleep(0.5)
-        page.keyboard.press("Enter")
+        too_long = len(full) > CHAT_MAX
+        if not too_long:
+            box.fill(full)
+            time.sleep(0.8)
+            too_long = self._typed_len(box) < len(full) * 0.98 or self._send_disabled()
+        via_source = False
+        if too_long:
+            self._send_via_source(full)
+            via_source = True
+        else:
+            page.keyboard.press("Enter")
 
         t0 = time.time()
         last_len, changed_at, saw_generating = -1, time.time(), False
@@ -518,6 +551,12 @@ class NotebookSession:
             now = time.time()
             elems = page.query_selector_all(ANSWER_SEL)
             if len(elems) <= before:
+                # Ô chat vẫn còn nguyên lệnh (không gửi được, VD vượt giới hạn ký tự) -> chuyển sang cách đưa vào nguồn
+                if not via_source and now - t0 > 25 and self._typed_len(page.locator(QUERY_BOX).first) > 100:
+                    self.log("   (ô chat không gửi được lệnh — chuyển sang đưa lệnh vào nguồn)")
+                    self._send_via_source(full)
+                    via_source, t0 = True, time.time()
+                    continue
                 if now - t0 > first_token_timeout:
                     self._debug("không có câu trả lời mới")
                     raise GeminiError("NotebookLM không tạo câu trả lời mới (quá thời gian chờ).")
