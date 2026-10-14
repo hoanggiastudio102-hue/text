@@ -351,6 +351,8 @@ def nb_proofread(job, session, text, code):
 
 def process_unit_nb(job, session, article, code):
     cfg = job.data
+    if (cfg.get("nb") or {}).get("kind") == "youtube":
+        return process_unit_yt(job, session, article, code)
     country = locales.get_country(code)
     with open(os.path.join(job.dir, "sources", article["file"]), "r", encoding="utf-8") as f:
         src = f.read()
@@ -454,6 +456,8 @@ def nb_open_article(job, session, article):
     """Sổ mới cho bài: tải bài gốc lên dạng tệp mang đúng tên bài (giống thao tác tay của sếp)."""
     cfg = job.data
     nb = cfg.get("nb") or {}
+    if nb.get("kind") == "youtube":
+        return yt_open_article(job, session, article)
     up_dir = os.path.join(job.dir, "upload")
     os.makedirs(up_dir, exist_ok=True)
     path = os.path.join(up_dir, f"{article['name']}.txt")
@@ -465,11 +469,179 @@ def nb_open_article(job, session, article):
     session.article_id = article["id"]
 
 
+# ---------------------------------------------------------------------------
+# YOUTUBE -> VĂN BẢN CHUẨN (NotebookLM): mỗi link 1 sổ; có phụ đề thì tải phụ đề lên dạng tệp, không có thì
+# thêm chính link video làm nguồn; NotebookLM biên tập thành văn bản chuẩn, tự nhắn "Tiếp tục" khi bị cụt.
+# ---------------------------------------------------------------------------
+YT_STYLES = {
+    "clean": ("Chuyển nó thành VĂN BẢN CHUẨN, đầy đủ từ đầu đến cuối:\n"
+              "- Giữ nguyên TOÀN BỘ lời nói và nội dung theo đúng thứ tự; không tóm tắt, không bỏ ý, không thêm ý.\n"
+              "- Thêm dấu câu, viết hoa đúng; chia thành các đoạn hợp lý theo ý (mỗi đoạn khoảng 3–6 câu).\n"
+              "- Sửa lỗi nhận dạng giọng nói (từ nghe nhầm, tên riêng, thuật ngữ, số liệu) dựa vào ngữ cảnh.\n"
+              "- Bỏ từ đệm và chỗ lặp vô nghĩa (ờ, à, ừm, um, uh, you know…), mốc thời gian, chú thích [Music]/[Âm nhạc]."),
+    "article": ("Biên tập nó thành BÀI VIẾT HOÀN CHỈNH, mạch lạc, đọc trôi chảy:\n"
+                "- Giữ ĐẦY ĐỦ mọi ý, ví dụ, số liệu, tên riêng theo đúng trình tự; không tóm tắt, không bỏ ý, không bịa thêm.\n"
+                "- Viết lại câu nói thành câu văn viết chuẩn, chia đoạn rõ ràng; có thể thêm tiêu đề mục ngắn khi chuyển ý lớn.\n"
+                "- Sửa lỗi nhận dạng giọng nói (từ nghe nhầm, tên riêng, thuật ngữ) dựa vào ngữ cảnh.\n"
+                "- Bỏ từ đệm, câu lặp, lời chào/kêu gọi đăng ký kênh lặp lại không mang nội dung."),
+}
+
+
+def yt_prompt(cfg, article, code):
+    nb = cfg.get("nb") or {}
+    style = YT_STYLES.get(nb.get("style") or "clean", YT_STYLES["clean"])
+    if code == "SAME":
+        lang_line = "- Giữ nguyên ngôn ngữ của video (không dịch)."
+    else:
+        country = locales.get_country(code)
+        lang_line = (f"- Viết toàn bộ bằng {VI_LANG.get(code, country['language'])}, văn phong tự nhiên như người "
+                     f"{country['name_vi']} viết (không dịch word-by-word).")
+    p = (f"Nguồn \"{article['name']}\" là bản chép lời (phụ đề) của một video YouTube. " + style + "\n" + lang_line +
+         "\n- Chỉ trả về văn bản kết quả, không lời dẫn, không ghi chú, không tóm tắt ở cuối.")
+    if (cfg.get("extra") or "").strip():
+        p += "\nYêu cầu thêm: " + cfg["extra"].strip()
+    return p
+
+
+def yt_open_article(job, session, article):
+    """Lấy tiêu đề + phụ đề rồi mở sổ mới: có phụ đề -> tải tệp phụ đề; không có -> thêm link video làm nguồn."""
+    import yt_util
+    cfg = job.data
+    url = article.get("url", "")
+    if not article.get("title_done"):
+        title = "" if cfg.get("dry_run") else yt_util.get_title(url)
+        if title:
+            safe = re.sub(r'[\\/:*?"<>|\n\r\t]+', " ", title).strip()[:80].strip(" .")
+            used = {a["name"] for a in cfg["articles"] if a is not article}
+            name, n = safe or article["name"], 2
+            while name in used:
+                name, n = f"{safe}_{n}", n + 1
+            article["name"] = name
+        article["title"] = title
+        article["title_done"] = True
+        job.save()
+    src_path = os.path.join(job.dir, "sources", article["file"])
+    text = ""
+    if os.path.exists(src_path):
+        with open(src_path, "r", encoding="utf-8") as f:
+            text = f.read().strip()
+    if not text and not article.get("transcript_tried"):
+        if cfg.get("dry_run"):
+            text, lang, err = ("xin chào các bạn hôm nay chúng ta nói về lịch sử " * 60).strip(), "vi", ""
+        else:
+            text, lang, err = yt_util.get_transcript(url)
+        article["transcript_tried"] = True
+        article["lang"] = lang
+        if text:
+            with open(src_path, "w", encoding="utf-8") as f:
+                f.write(text)
+            article["chars"] = len(text)
+            job.log(f"   📝 Lấy được phụ đề ({lang or '?'}): {len(text):,} ký tự")
+        else:
+            job.log(f"   ⚠️ Không lấy được phụ đề trực tiếp ({err}) — để NotebookLM tự đọc video.")
+        job.save()
+    nb = cfg.get("nb") or {}
+    from notebook_client import BASE_CHAT_RULES
+    rules = (BASE_CHAT_RULES + "\n\n" + (nb.get("chat_rules") or "")).strip()
+    title = f"{article['name']} | YouTube → Text"
+    if text:
+        up_dir = os.path.join(job.dir, "upload")
+        os.makedirs(up_dir, exist_ok=True)
+        path = os.path.join(up_dir, f"{article['name']}.txt")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        session.open_article(path, title=title, chat_rules=rules, longer=True)
+    else:
+        session.open_article(None, title=title, chat_rules=rules, longer=True, url=url)
+    session.article_id = article["id"]
+
+
+def process_unit_yt(job, session, article, code):
+    cfg = job.data
+    res = cfg["results"][rkey(article["id"], code)]
+    res.update(status="running", started_at=time.time(), chunks_total=1, chunks_done=0, error="")
+    cfg["current"] = {"article": article["id"], "code": code}
+    job.save()
+    job.log(f"▶ [{article['name']}] YouTube → văn bản" + ("" if code == "SAME" else f" ({code})"))
+    src = ""
+    p = os.path.join(job.dir, "sources", article["file"])
+    if os.path.exists(p):
+        with open(p, "r", encoding="utf-8") as f:
+            src = f.read().strip()
+
+    text = session.ask(yt_prompt(cfg, article, code))
+    if not text.strip():
+        raise GeminiError("NotebookLM trả về nội dung rỗng.")
+
+    # Độ dài mục tiêu: theo phụ đề (bỏ từ đệm nên lấy ~75%). Không có phụ đề thì dựa vào câu trả lời 'HẾT'.
+    import yt_util
+    if src and (cfg.get("nb") or {}).get("style") != "summary":
+        if code == "SAME":
+            mcode = yt_util.lang_to_code(article.get("lang"))
+            want, unit = locales.target_units(src, mcode, 0.75)
+        else:
+            mcode = code
+            want, unit = locales.target_units(src, code, 0.75)
+    else:
+        mcode, want, unit = code, 0, ""
+    lang = "văn bản" if code == "SAME" else VI_LANG.get(code, code)
+    for rnd in range(1, 11):
+        have = locales.measure(text, mcode) if want else 0
+        if want and have >= 0.9 * want:
+            break
+        if want:
+            job.log(f"   ↪ mới {have:,}/{want:,} {unit} — nhắn 'Tiếp tục' ({rnd}/10)…")
+        elif rnd > 1:
+            pass
+        last = text.strip()[-160:].replace("\n", " ")
+        res["chunks_total"] = rnd + 1
+        job.save()
+        try:
+            more = session.ask(
+                f"Tiếp tục {lang} từ ĐÚNG chỗ vừa dừng (ngay sau đoạn: \"…{last}\") cho tới hết video. Không lặp lại "
+                f"phần đã viết, không lời dẫn. Nếu đã viết hết toàn bộ video thì chỉ trả lời đúng một từ: HẾT")
+        except (GeminiLimitError, GeminiCancelled):
+            raise
+        except GeminiError as e:
+            job.log(f"   (dừng bước tiếp tục: {e})")
+            break
+        if re.fullmatch(r"\W*(HẾT|HET|END|DONE)\W*", more.strip(), re.I) or len(more.strip()) < 40:
+            break
+        merged = merge_continuation(text, more)
+        if len(merged) <= len(text) + 40:
+            break
+        text = merged
+    text = re.sub(r"\n?\s*\bHẾT\W*$", "", text.strip()).strip()
+    if want and locales.measure(text, mcode) < 0.6 * want:
+        job.log(f"   ⚠️ bản ra có vẻ ngắn so với phụ đề — sếp kiểm tra lại.")
+
+    if (cfg.get("nb") or {}).get("review_level", "fast") != "off":
+        try:
+            text, _ = nb_proofread(job, session, text, code if code != "SAME" else "SAME")
+        except (GeminiLimitError, GeminiCancelled):
+            raise
+        except Exception as e:
+            job.log(f"   (bỏ qua bước soát lỗi: {str(e)[:120]})")
+
+    fname = f"{article['name']}.txt" if code == "SAME" else f"{article['name']}_{code}.txt"
+    art_dir = os.path.join(job.files_dir, article["id"])
+    os.makedirs(art_dir, exist_ok=True)
+    header = (f"{article.get('title') or article['name']}\n{article.get('url', '')}\n\n"
+              if (cfg.get("nb") or {}).get("header", True) else "")
+    with open(os.path.join(art_dir, fname), "w", encoding="utf-8") as f:
+        f.write(header + text + "\n")
+    res.update(status="done", file=f"{article['id']}/{fname}", chars=len(text), chunks_done=res.get("chunks_total", 1),
+               finished_at=time.time())
+    job.save()
+    job.log(f"✅ Xong [{article['name']}]: {len(text):,} ký tự" + (f" (phụ đề gốc {len(src):,})" if src else "") +
+            f" -> {fname}")
+
+
 class DryNotebook(DryRunSession):
     article_id = None
 
-    def open_article(self, path, **k):
-        self.log(f"[CHẠY THỬ] sổ mới + tải lên {os.path.basename(path)}")
+    def open_article(self, path=None, **k):
+        self.log(f"[CHẠY THỬ] sổ mới + nguồn {os.path.basename(path) if path else k.get('url')}")
 
     def ask(self, prompt, **k):
         if prompt.startswith("Tiếp tục"):
@@ -506,7 +678,8 @@ def finalize(job):
             cfg["history_files"] = [name]
         else:
             multi = len(cfg["articles"]) > 1
-            zip_name = f"{cfg['base_name']}_BanDia_{cfg['id'][:6]}.zip"
+            tag = "Text" if (cfg.get("nb") or {}).get("kind") == "youtube" else "BanDia"
+            zip_name = f"{cfg['base_name']}_{tag}_{cfg['id'][:6]}.zip"
             with zipfile.ZipFile(os.path.join(OUTPUT_FOLDER, zip_name), "w", zipfile.ZIP_DEFLATED) as z:
                 for k, r in done:
                     aid = k.split(":", 1)[0]

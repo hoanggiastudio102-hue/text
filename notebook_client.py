@@ -28,6 +28,8 @@ RX_ADD = re.compile(r"Thêm nguồn|Add source", re.I)
 RX_PASTE = re.compile(r"Văn bản đã sao chép|Copied text|Paste text", re.I)
 RX_INSERT = re.compile(r"^\s*(Chèn|Insert)\s*$", re.I)
 RX_PASTE_BOX = re.compile(r"Dán văn bản|Paste (your )?text", re.I)
+RX_WEB = re.compile(r"Trang web|Website", re.I)
+RX_URL_BOX = re.compile(r"Dán liên kết|Paste (any )?link|URL", re.I)
 RX_UPLOAD = re.compile(r"Tải tệp lên|Upload files?", re.I)
 RX_NB_MENU = re.compile(r"Cấu hình sổ ghi chú|Notebook (settings|configuration)|Configure notebook|More options", re.I)
 RX_CHAT_CFG = re.compile(r"Định cấu hình cuộc trò chuyện|Configure chat", re.I)
@@ -336,6 +338,36 @@ class NotebookSession:
             raise GeminiError("NotebookLM chưa nhận tệp bài gốc (quá thời gian chờ).")
         self._dismiss_intro()
 
+    def _add_url(self, url):
+        """Thêm nguồn > Trang web (YouTube) > dán link > Chèn. NotebookLM tự lấy bản chép lời của video."""
+        page = self.page
+        before = max(0, self._source_count())
+        box = page.get_by_placeholder(RX_URL_BOX).first
+        if not self._visible(box):
+            web = page.get_by_role("button", name=RX_WEB).first
+            if not self._visible(web):
+                page.get_by_role("button", name=RX_ADD).first.click()
+                time.sleep(1.2)
+                web = page.get_by_role("button", name=RX_WEB).first
+            web.click()
+        try:
+            box.wait_for(timeout=15000)
+        except Exception:
+            self._debug("không mở được ô dán link")
+            raise GeminiError("Không mở được hộp 'URL trang web và YouTube' của NotebookLM.")
+        box.fill(url)
+        time.sleep(0.8)
+        page.get_by_role("button", name=RX_INSERT).first.click()
+        try:
+            box.wait_for(state="hidden", timeout=90000)
+        except Exception:
+            self._debug("link chưa chèn xong")
+            raise GeminiError("NotebookLM không nhận link YouTube (quá thời gian chờ).")
+        if not self._wait_sources(before + 1, timeout=240):
+            self._debug("video chưa thành nguồn")
+            raise GeminiError("NotebookLM chưa lấy được bản chép lời của video (video riêng tư/không có phụ đề?).")
+        self._dismiss_intro()
+
     def configure_chat(self, rules="", longer=True):
         """⋮ > Định cấu hình cuộc trò chuyện: Tuỳ chỉnh (≤10.000 ký tự) + độ dài 'Dài hơn'. Lỗi thì bỏ qua."""
         page = self.page
@@ -393,17 +425,21 @@ class NotebookSession:
         except Exception:
             pass
 
-    def open_article(self, file_path, title="", chat_rules="", longer=True):
-        """Tạo sổ MỚI cho 1 bài: tải bài lên (tệp) + nguồn cố định + cấu hình chat + đặt tên."""
+    def open_article(self, file_path=None, title="", chat_rules="", longer=True, url=None):
+        """Tạo sổ MỚI cho 1 bài: tải bài lên (tệp) hoặc thêm link YouTube + nguồn cố định + cấu hình chat + đặt tên."""
         self._check_cancel()
         self._create_notebook(add_fixed=False)
-        try:
-            self._upload_file(file_path)
-            self.log(f"   + tải lên bài gốc: {os.path.basename(file_path)}")
-        except Exception as e:
-            self.log(f"   ⚠️ Không tải lên được tệp ({str(e)[:120]}) — dán văn bản thay thế.")
-            with open(file_path, "r", encoding="utf-8") as f:
-                self._add_source(f.read())
+        if file_path:
+            try:
+                self._upload_file(file_path)
+                self.log(f"   + tải lên: {os.path.basename(file_path)}")
+            except Exception as e:
+                self.log(f"   ⚠️ Không tải lên được tệp ({str(e)[:120]}) — dán văn bản thay thế.")
+                with open(file_path, "r", encoding="utf-8") as f:
+                    self._add_source(f.read())
+        elif url:
+            self._add_url(url)
+            self.log(f"   + thêm video YouTube làm nguồn: {url}")
         for i, src in enumerate(self.fixed_sources, start=1):
             self._add_source(src)
             self.log(f"   + nguồn cố định {i}/{len(self.fixed_sources)} ({len(src):,} ký tự)")

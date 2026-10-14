@@ -1232,6 +1232,58 @@ def api_nb_run():
 
 
 # ======================================================================
+#  YOUTUBE -> VĂN BẢN CHUẨN (NotebookLM): dán 1 hay nhiều link, mỗi link ra 1 file văn bản
+# ======================================================================
+import yt_util
+
+
+@app.route("/api/yt/run", methods=["POST"])
+def api_yt_run():
+    active = _active_job_id()
+    if active:
+        return jsonify({"status": "error", "message": "Đang có một job chạy. Hãy đợi xong hoặc bấm Huỷ trước.",
+                        "job_id": active}), 409
+    form = request.form
+    links = yt_util.find_links(form.get("links", ""))
+    if not links:
+        return jsonify({"status": "error", "message": "Chưa có link YouTube hợp lệ (mỗi dòng một link)."}), 400
+    if len(links) > 50:
+        return jsonify({"status": "error", "message": f"Tối đa 50 link mỗi lần (đang có {len(links)})."}), 400
+    code = (form.get("lang") or "SAME").upper()
+    try:
+        locales.get_country(code)
+    except KeyError:
+        code = "SAME"
+    job_id = uuid.uuid4().hex[:16]
+    job_dir = os.path.join(JOBS_DIR, job_id)
+    os.makedirs(os.path.join(job_dir, "sources"), exist_ok=True)
+    arts = []
+    for i, l in enumerate(links, start=1):
+        fname = f"a{i}.txt"
+        open(os.path.join(job_dir, "sources", fname), "w", encoding="utf-8").close()
+        arts.append({"id": f"a{i}", "name": f"youtube_{l['id']}", "file": fname, "chars": 0, "url": l["url"]})
+    style = form.get("style") if form.get("style") in ("clean", "article") else "clean"
+    job = {
+        "id": job_id, "created_at": time.time(), "state": "queued", "error": "", "engine": "notebook",
+        "nb": {"kind": "youtube", "style": style, "folder": "YouTube", "type": "YouTube → Text",
+               "review_level": "fast" if form.get("review") in ("1", "true", "on") else "off",
+               "header": form.get("header") in ("1", "true", "on"), "chat_rules": "", "longer": True,
+               "fixed_sources": []},
+        "base_name": _safe_name(form.get("customFilename"), "YouTube_Text"),
+        "articles": arts, "countries": [code], "results": {f"{a['id']}:{code}": {"status": "pending"} for a in arts},
+        "style_id": "", "style_text": "", "mode": "localize", "outline_use": "strict", "source_use": "fresh",
+        "audience": "", "length": "same", "keywords": "", "glossary": "", "extra": (form.get("extra") or "").strip(),
+        "review": False, "chunk_size": 8000,
+        "profile": (form.get("profileName") or "gemini_profile").strip() or "gemini_profile",
+        "model": "NotebookLM", "thinking": "", "dry_run": form.get("dryRun") in ("1", "true", "on"),
+        "zip": None, "current": None,
+    }
+    _write_json(os.path.join(job_dir, "job.json"), job)
+    _launch_job(job_id)
+    return jsonify({"status": "success", "job_id": job_id, "units": len(arts)})
+
+
+# ======================================================================
 #  ĐỘI MÁY: máy chủ (sếp) nhận sản phẩm/báo cáo từ máy nhân viên
 # ======================================================================
 import fleet

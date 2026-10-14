@@ -35,6 +35,7 @@
             <button class="tab-btn" data-tab="tab-translate" hidden><i class="fa-solid fa-language"></i> Sáng Tạo Ngữ Đơn</button>
             <button class="tab-btn" data-tab="tab-batch" hidden><i class="fa-solid fa-layer-group"></i> Sáng Tạo Ngữ Hàng Loạt</button>
             <button class="tab-btn" data-tab="tab-creative" hidden><i class="fa-solid fa-wand-magic-sparkles"></i> Sáng Tạo</button>
+            <button class="tab-btn" data-tab="tab-yt"><i class="fa-brands fa-youtube"></i> YouTube → Text</button>
             <button class="tab-btn active" data-tab="tab-localize"><i class="fa-solid fa-earth-asia"></i> Tái Sáng Tạo Đa Quốc Gia</button>
             <button class="tab-btn" data-tab="tab-notebook"><i class="fa-solid fa-book-open"></i> NotebookLM</button>
             <button class="tab-btn" data-tab="tab-fleet"><i class="fa-solid fa-network-wired"></i> Đội Máy</button>
@@ -657,6 +658,66 @@
             </div>
         </div>
 
+        <!-- YouTube -> văn bản chuẩn (NotebookLM) -->
+        <div id="tab-yt" class="workspace tab-content" style="display: none;">
+            <div class="card input-section">
+                <h2><i class="fa-brands fa-youtube"></i> YouTube → Văn bản chuẩn</h2>
+                <p class="lz-hint">Dán một hay nhiều link YouTube (mỗi dòng một link). Với mỗi video, Tool lấy phụ đề, tạo một sổ NotebookLM mới rồi biên tập thành văn bản chuẩn: đủ lời, đúng dấu câu, chia đoạn, sửa lỗi nghe nhầm. Video không lấy được phụ đề thì NotebookLM tự đọc video. Mỗi video ra một file .txt.</p>
+                <form id="ytForm">
+                    <div class="form-group">
+                        <label for="ytLinks"><span><i class="fa-solid fa-link icon-text"></i> Link YouTube</span><span id="ytCount" class="char-count">0 link</span></label>
+                        <textarea id="ytLinks" class="glass-input" rows="8" placeholder="https://www.youtube.com/watch?v=...&#10;https://youtu.be/...&#10;https://www.youtube.com/shorts/..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="ytStyle"><span><i class="fa-solid fa-pen-nib"></i> Kiểu văn bản</span></label>
+                        <select id="ytStyle" class="glass-input">
+                            <option value="clean">Văn bản chuẩn — giữ nguyên lời nói, thêm dấu câu, chia đoạn, bỏ từ đệm</option>
+                            <option value="article">Bài viết hoàn chỉnh — biên tập thành văn viết mạch lạc, giữ đủ ý</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="ytLang"><span><i class="fa-solid fa-language"></i> Ngôn ngữ văn bản</span></label>
+                        <select id="ytLang" class="glass-input"><option value="SAME">Giữ nguyên ngôn ngữ của video</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="ytExtra"><span><i class="fa-solid fa-comment-dots"></i> Yêu cầu thêm (tuỳ chọn)</span></label>
+                        <textarea id="ytExtra" class="glass-input" rows="2" placeholder="VD: bỏ đoạn quảng cáo nhà tài trợ, giữ lời dẫn mở đầu..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="ytName"><span><i class="fa-solid fa-tag"></i> Tên file ZIP (tuỳ chọn)</span></label>
+                        <input type="text" id="ytName" class="glass-input" placeholder="VD: KenhLichSu_T10">
+                        <label class="lz-check"><input type="checkbox" id="ytReview" checked> <span><b>Soát lỗi lần 2</b> — NotebookLM rà chính tả, tên riêng, từ nghe nhầm và tự sửa</span></label>
+                        <label class="lz-check"><input type="checkbox" id="ytHeader" checked> <span>Ghi tiêu đề video + link ở đầu mỗi file</span></label>
+                        <label class="lz-check"><input type="checkbox" id="ytDry"> <span>Chạy thử — không mở NotebookLM, chỉ kiểm tra luồng và file xuất</span></label>
+                    </div>
+                    <div class="action-bar lz-actions">
+                        <button type="submit" id="ytStart" class="btn-glow"><i class="fa-solid fa-bolt"></i> Chuyển thành văn bản</button>
+                    </div>
+                </form>
+            </div>
+            <div class="card output-section">
+                <h2><i class="fa-solid fa-list-check"></i> Tiến Độ &amp; Kết Quả</h2>
+                <div id="ytEmpty" class="empty-state"><i class="fa-brands fa-youtube"></i><p>Chưa có job. Dán link YouTube rồi bấm Chuyển thành văn bản.</p></div>
+                <div id="ytJob" style="display: none;">
+                    <div class="lz-jobhead"><span id="ytState" class="lz-badge">—</span><span id="ytSummary" class="lz-muted"></span></div>
+                    <div class="lz-progress"><div id="ytBar" class="lz-progress-bar"></div></div>
+                    <div id="ytError" class="lz-error" style="display: none;"></div>
+                    <div id="ytGroups" class="lz-chips"></div>
+                    <div class="lz-actions-row">
+                        <button type="button" id="ytCancel" class="btn-primary" style="display: none;"><i class="fa-solid fa-ban"></i> Huỷ</button>
+                        <button type="button" id="ytResume" class="btn-primary" style="display: none;"><i class="fa-solid fa-play"></i> Tiếp tục phần còn thiếu</button>
+                        <a id="ytZip" href="#" class="btn-primary" style="display: none;" download><i class="fa-solid fa-file-zipper"></i> Tải tất cả (ZIP)</a>
+                    </div>
+                    <div id="ytPreviewBox" style="display: none;">
+                        <label><span id="ytPreviewTitle">Xem trước</span></label>
+                        <textarea id="ytPreviewText" class="glass-input" rows="14" readonly></textarea>
+                        <div class="lz-actions-row"><a id="ytPreviewDl" href="#" class="btn-primary" download><i class="fa-solid fa-download"></i> Tải file này</a></div>
+                    </div>
+                    <div class="log-container"><h4><i class="fa-solid fa-terminal"></i> Nhật ký job</h4><pre id="ytLog">...</pre></div>
+                </div>
+            </div>
+        </div>
+
         <!-- Module NotebookLM: Thư mục -> Dạng bài -> dán bài, chạy nhiều nước -->
         <div id="tab-notebook" class="workspace tab-content" style="display: none;">
             <div class="card input-section">
@@ -1045,5 +1106,6 @@
     <script src="{{ url_for('static', filename='localize.js') }}?v={{ asset_v }}"></script>
     <script src="{{ url_for('static', filename='fleet.js') }}?v={{ asset_v }}"></script>
     <script src="{{ url_for('static', filename='notebook.js') }}?v={{ asset_v }}"></script>
+    <script src="{{ url_for('static', filename='yt.js') }}?v={{ asset_v }}"></script>
 </body>
 </html>
