@@ -120,19 +120,20 @@
             b.type = 'button';
             b.className = 'res-chip ' + r.status + (r.file && r.file === shownFile ? ' active' : '');
             let tail = '⏳';
-            if (r.status === 'done') tail = '✅';
+            if (r.status === 'done') tail = r.warning ? '⚠️' : '✅';
             else if (r.status === 'running') tail = r.chunks_total > 1 ? `🔄 ${r.chunks_done || 0}/${r.chunks_total}` : '🔄';
             else if (r.status === 'error') tail = '❌';
             b.innerHTML = `${esc(a.name)} ${tail}`;
             b.title = r.status === 'error' ? (r.error || 'Lỗi') : (a.url || '');
             if (r.status === 'done') {
-                b.title = `${(r.chars || 0).toLocaleString('vi-VN')} ký tự — bấm để xem`;
+                b.title = `${(r.chars || 0).toLocaleString('vi-VN')} ký tự${r.warning ? ' — ' + r.warning : ''} — bấm để xem`;
                 b.addEventListener('click', () => showResult(r.file, a.name));
             }
             box.appendChild(b);
         });
         const running = job.state === 'running' || job.state === 'queued';
         $('ytCancel').style.display = running ? 'inline-flex' : 'none';
+        $('ytReset').style.display = running ? 'none' : 'inline-flex';
         $('ytResume').style.display = !running && done < keys.length ? 'inline-flex' : 'none';
         const zip = $('ytZip');
         if (job.zip) { zip.style.display = 'inline-flex'; zip.href = `/api/download/${encodeURIComponent(job.zip)}`; } else zip.style.display = 'none';
@@ -171,4 +172,19 @@
         if (b.getAttribute('data-tab') === 'tab-yt') b.addEventListener('click', () => { if ($('ytLang').options.length < 2) loadLangs(); });
     });
     loadLangs();
+    // ---------- Làm mới: đóng kết quả cũ, nhớ để tải lại trang không hiện lại ----------
+    function resetView() {
+        try { if (jobId) localStorage.setItem('dismissed_youtube', jobId); } catch (e) { /* bỏ qua */ }
+        clearInterval(pollTimer); pollTimer = null; jobId = null; shownFile = null;
+        $('ytJob').style.display = 'none';
+        $('ytPreviewBox').style.display = 'none';
+        $('ytEmpty').style.display = '';
+        toast('Đã làm mới — có thể chạy job mới. File cũ vẫn ở tab Lịch Sử.');
+    }
+    $('ytReset').addEventListener('click', resetView);
+    jget('/api/localize/latest?kind=youtube').then((d) => {
+        let dis = null;
+        try { dis = localStorage.getItem('dismissed_youtube'); } catch (e) { /* bỏ qua */ }
+        if (d && d.job_id && d.job_id !== dis && !jobId) attach(d.job_id);
+    }).catch(() => {});
 })();

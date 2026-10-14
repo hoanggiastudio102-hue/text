@@ -1123,14 +1123,27 @@ def api_localize_text(job_id):
 
 @app.route("/api/localize/latest")
 def api_localize_latest():
-    """Job gần nhất (để giao diện tự nối lại tiến độ sau khi tải lại trang)."""
+    """Job gần nhất theo loại (localize | notebook | youtube) để mỗi tab tự nối lại tiến độ sau khi tải lại trang."""
+    kind = (request.args.get("kind") or "").strip()
     best, best_t = None, 0
     for jid in os.listdir(JOBS_DIR):
         p = os.path.join(JOBS_DIR, jid, "job.json")
-        if os.path.isfile(p):
-            t = os.path.getmtime(p)
-            if t > best_t:
-                best, best_t = jid, t
+        if not os.path.isfile(p):
+            continue
+        t = os.path.getmtime(p)
+        if t <= best_t:
+            continue
+        if kind:
+            try:
+                d = _read_json(p)
+            except Exception:
+                continue
+            k = "localize"
+            if d.get("engine") == "notebook":
+                k = "youtube" if (d.get("nb") or {}).get("kind") == "youtube" else "notebook"
+            if k != kind:
+                continue
+        best, best_t = jid, t
     return jsonify({"status": "success", "job_id": best})
 
 

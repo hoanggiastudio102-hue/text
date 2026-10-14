@@ -512,6 +512,7 @@
         // nút
         const running = job.state === 'running' || job.state === 'queued';
         $('lzCancel').style.display = running ? 'inline-flex' : 'none';
+        $('lzReset').style.display = running ? 'none' : 'inline-flex';
         $('lzResume').style.display = !running && done < keys.length ? 'inline-flex' : 'none';
         const zip = $('lzZip');
         if (job.zip) { zip.style.display = 'inline-flex'; zip.href = `/api/download/${encodeURIComponent(job.zip)}`; }
@@ -558,5 +559,19 @@
     });
     loadLocales();
     // Nối lại job gần nhất sau khi tải lại trang
-    jget('/api/localize/latest').then((d) => { if (d && d.job_id) attach(d.job_id); }).catch(() => {});
+    // ---------- Làm mới: đóng kết quả cũ, nhớ để tải lại trang không hiện lại ----------
+    function resetView() {
+        try { if (jobId) localStorage.setItem('dismissed_localize', jobId); } catch (e) { /* bỏ qua */ }
+        clearInterval(pollTimer); pollTimer = null; jobId = null; shownFile = null;
+        $('lzJob').style.display = 'none';
+        $('lzPreviewBox').style.display = 'none';
+        $('lzEmpty').style.display = '';
+        toast('Đã làm mới — có thể chạy job mới. File cũ vẫn ở tab Lịch Sử.');
+    }
+    $('lzReset').addEventListener('click', resetView);
+    jget('/api/localize/latest?kind=localize').then((d) => {
+        let dis = null;
+        try { dis = localStorage.getItem('dismissed_localize'); } catch (e) { /* bỏ qua */ }
+        if (d && d.job_id && d.job_id !== dis && !jobId) attach(d.job_id);
+    }).catch(() => {});
 })();

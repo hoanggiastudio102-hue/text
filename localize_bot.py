@@ -627,7 +627,7 @@ def process_unit_yt(job, session, article, code):
     job.save()
     if len(parts) > 1:
         job.log(f"   Phụ đề dài {len(src):,} ký tự — chia {len(parts)} phần để viết đầy đủ.")
-    outs = []
+    outs, failed_parts = [], []
     for i, part in enumerate(parts, start=1):
         if len(parts) == 1:
             prompt = base
@@ -636,25 +636,40 @@ def process_unit_yt(job, session, article, code):
                       "phần trước). CHỈ xử lý đúng đoạn phụ đề dưới đây, đầy đủ từ câu đầu tới câu cuối của đoạn này, "
                       "không viết lại phần khác, không mở đầu/kết luận riêng cho phần:\n<<<\n" + part + "\n>>>")
             job.log(f"   phần {i}/{len(parts)} ({len(part):,} ký tự phụ đề)…")
-        t = ""
+        t, err = "", None
         for attempt in (1, 2):
             try:
                 t = session.ask(prompt)
                 if t.strip():
+                    err = None
                     break
                 raise GeminiError("NotebookLM trả về nội dung rỗng.")
             except (GeminiLimitError, GeminiCancelled):
                 raise
-            except GeminiError as e:
-                job.log(f"   ⚠️ {e}")
-                if attempt == 2:
-                    raise
-                time.sleep(5)
+            except Exception as e:
+                err = e
+                job.log(f"   ⚠️ {str(e)[:160]}")
+                if attempt == 1:
+                    time.sleep(5)
+        if err is not None:
+            if len(parts) == 1:
+                raise err if isinstance(err, GeminiError) else GeminiError(str(err))
+            job.log(f"   ⏭️ bỏ qua phần {i}/{len(parts)} (lỗi), làm tiếp phần sau.")
+            outs.append(f"[THIẾU PHẦN {i}/{len(parts)} — NotebookLM lỗi, cần làm lại phần này]")
+            failed_parts.append(i)
+            res["chunks_done"] = i
+            job.save()
+            continue
         want = locales.target_units(part, mcode, 0.75)[0] if part else 0
         t = _yt_continue(job, session, t, want, mcode, lang, 10 if len(parts) == 1 else 4, len(parts) > 1)
         outs.append(t)
         res["chunks_done"] = i
         job.save()
+    if parts and len(failed_parts) == len(parts):
+        raise GeminiError("Tất cả các phần đều lỗi.")
+    if failed_parts:
+        res["warning"] = f"thiếu phần {', '.join(map(str, failed_parts))}/{len(parts)}"
+        job.log(f"   ⚠️ Video còn thiếu phần {', '.join(map(str, failed_parts))} — đã đánh dấu [THIẾU PHẦN] trong file.")
     text = "\n\n".join(o.strip() for o in outs if o.strip())
     if src and locales.measure(text, mcode) < 0.6 * locales.target_units(src, mcode, 0.75)[0]:
         job.log("   ⚠️ bản ra có vẻ ngắn so với phụ đề — sếp kiểm tra lại.")
@@ -861,7 +876,7 @@ def run_job(job_dir, session_factory=None):
                     break
                 except GeminiError as e:
                     cfg["results"][key].update(status="error", error=str(e))
-                    job.log(f"❌ [{article['name']}] {code}: {e}")
+                    job.log(f"❌ [{article['name']}] {code}: {e} — bỏ qua, chuyển sang mục sau.")
                     # lỗi cấu hình toàn cục (chưa đăng nhập, không chọn được model) -> dừng cả job
                     if any(k in str(e) for k in ("đăng nhập", "model", "Chrome")):
                         cfg["error"] = str(e)
@@ -872,9 +887,14 @@ def run_job(job_dir, session_factory=None):
                         first = True
                     except GeminiError:
                         pass
-                except Exception as e:  # lỗi bất ngờ của 1 mục không được làm hỏng cả job
+                except Exception as e:  # lỗi bất ngờ của 1 mục không được làm hỏng cả job -> bỏ qua, sang mục sau
                     cfg["results"][key].update(status="error", error=f"{type(e).__name__}: {e}")
-                    job.log(f"❌ [{article['name']}] {code}: {type(e).__name__}: {e}")
+                    job.log(f"❌ [{article['name']}] {code}: {type(e).__name__}: {e} — bỏ qua, chuyển sang mục sau.")
+                    try:
+                        session.new_chat()
+                        first = True
+                    except Exception:
+                        pass
                 job.save()
     except GeminiError as e:
         cfg["error"] = str(e)

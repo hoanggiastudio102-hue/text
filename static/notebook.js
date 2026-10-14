@@ -270,6 +270,7 @@
         });
         const running = job.state === 'running' || job.state === 'queued';
         $('nbCancel').style.display = running ? 'inline-flex' : 'none';
+        $('nbReset').style.display = running ? 'none' : 'inline-flex';
         $('nbResume').style.display = !running && done < keys.length ? 'inline-flex' : 'none';
         const zip = $('nbZip');
         if (job.zip) { zip.style.display = 'inline-flex'; zip.href = `/api/download/${encodeURIComponent(job.zip)}`; } else zip.style.display = 'none';
@@ -309,4 +310,19 @@
     });
     loadTree();
     loadCountries();
+    // ---------- Làm mới: đóng kết quả cũ, nhớ để tải lại trang không hiện lại ----------
+    function resetView() {
+        try { if (jobId) localStorage.setItem('dismissed_notebook', jobId); } catch (e) { /* bỏ qua */ }
+        clearInterval(pollTimer); pollTimer = null; jobId = null; shownFile = null;
+        $('nbJob').style.display = 'none';
+        $('nbPreviewBox').style.display = 'none';
+        $('nbEmpty').style.display = '';
+        toast('Đã làm mới — có thể chạy job mới. File cũ vẫn ở tab Lịch Sử.');
+    }
+    $('nbReset').addEventListener('click', resetView);
+    jget('/api/localize/latest?kind=notebook').then((d) => {
+        let dis = null;
+        try { dis = localStorage.getItem('dismissed_notebook'); } catch (e) { /* bỏ qua */ }
+        if (d && d.job_id && d.job_id !== dis && !jobId) attach(d.job_id);
+    }).catch(() => {});
 })();
