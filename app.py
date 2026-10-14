@@ -693,11 +693,23 @@ def api_delete_prompt(prompt_id):
     
     return jsonify({"status": "success", "message": "Đã xóa Prompt."})
 
+def _safe_path(base, rel, depth=None):
+    """Ghép đường dẫn an toàn, GIỮ tên tiếng Việt/ký tự đặc biệt (secure_filename làm mất chữ có dấu -> 'Không tìm thấy file')."""
+    parts = [p for p in (rel or "").replace("\\", "/").split("/") if p]
+    if not parts or (depth and len(parts) != depth) or any(p in (".", "..") or ":" in p for p in parts):
+        return None
+    base = os.path.abspath(base)
+    path = os.path.abspath(os.path.join(base, *parts))
+    if not path.startswith(base + os.sep):
+        return None
+    return path if os.path.isfile(path) else None
+
+
 @app.route("/api/download/<filename>")
 def download_file(filename):
-    file_path = os.path.join(OUTPUT_FOLDER, secure_filename(filename))
-    if os.path.exists(file_path):
-        return send_file(file_path, as_attachment=True)
+    file_path = _safe_path(OUTPUT_FOLDER, filename, 1)
+    if file_path:
+        return send_file(file_path, as_attachment=True, download_name=os.path.basename(file_path))
     return "File not found", 404
 
 
@@ -1092,13 +1104,9 @@ def api_localize_resume(job_id):
 @app.route("/api/localize/<job_id>/file")
 def api_localize_file(job_id):
     d = _job_dir(job_id)
-    rel = (request.args.get("f") or "").replace("\\", "/")
-    parts = [secure_filename(p) for p in rel.split("/") if p]
-    if not d or len(parts) != 2 or not all(parts):
-        return "File not found", 404
-    path = os.path.join(d, "files", parts[0], parts[1])
-    if os.path.isfile(path):
-        return send_file(path, as_attachment=True, download_name=parts[1])
+    path = _safe_path(os.path.join(d, "files"), request.args.get("f"), 2) if d else None
+    if path:
+        return send_file(path, as_attachment=True, download_name=os.path.basename(path))
     return "File not found", 404
 
 
@@ -1106,12 +1114,8 @@ def api_localize_file(job_id):
 def api_localize_text(job_id):
     """Xem trước nội dung 1 kết quả trong giao diện."""
     d = _job_dir(job_id)
-    rel = (request.args.get("f") or "").replace("\\", "/")
-    parts = [secure_filename(p) for p in rel.split("/") if p]
-    if not d or len(parts) != 2 or not all(parts):
-        return jsonify({"status": "error", "message": "Không tìm thấy file."}), 404
-    path = os.path.join(d, "files", parts[0], parts[1])
-    if not os.path.isfile(path):
+    path = _safe_path(os.path.join(d, "files"), request.args.get("f"), 2) if d else None
+    if not path:
         return jsonify({"status": "error", "message": "Không tìm thấy file."}), 404
     with open(path, "r", encoding="utf-8") as f:
         return jsonify({"status": "success", "text": f.read()})

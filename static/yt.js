@@ -121,7 +121,7 @@
             b.className = 'res-chip ' + r.status + (r.file && r.file === shownFile ? ' active' : '');
             let tail = '⏳';
             if (r.status === 'done') tail = '✅';
-            else if (r.status === 'running') tail = '🔄';
+            else if (r.status === 'running') tail = r.chunks_total > 1 ? `🔄 ${r.chunks_done || 0}/${r.chunks_total}` : '🔄';
             else if (r.status === 'error') tail = '❌';
             b.innerHTML = `${esc(a.name)} ${tail}`;
             b.title = r.status === 'error' ? (r.error || 'Lỗi') : (a.url || '');

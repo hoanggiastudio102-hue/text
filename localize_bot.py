@@ -556,6 +556,54 @@ def yt_open_article(job, session, article):
     session.article_id = article["id"]
 
 
+YT_PART_CHARS = 12000
+
+
+def split_plain(text, n):
+    """Cắt phụ đề dài thành các phần ~n ký tự, ưu tiên cắt ở cuối câu, không cắt giữa từ."""
+    t = (text or "").strip()
+    out = []
+    while len(t) > n * 1.3:
+        cut = max(t.rfind(m, 0, n) for m in (". ", "? ", "! ", "。", "？", "！", "… "))
+        if cut < n * 0.6:
+            cut = t.rfind(" ", 0, n)
+        if cut < n * 0.5:
+            cut = n - 1
+        out.append(t[:cut + 1].strip())
+        t = t[cut + 1:].strip()
+    if t:
+        out.append(t)
+    return out
+
+
+def _yt_continue(job, session, text, want, mcode, lang, max_rounds, is_part):
+    """Câu trả lời bị cụt -> nhắn 'Tiếp tục' và nối lại (bỏ phần lặp)."""
+    scope = "cho tới hết PHẦN phụ đề này" if is_part else "cho tới hết video"
+    for rnd in range(1, max_rounds + 1):
+        have = locales.measure(text, mcode) if want else 0
+        if want and have >= 0.9 * want:
+            break
+        if want:
+            job.log(f"   ↪ mới {have:,}/{want:,} — nhắn 'Tiếp tục' ({rnd}/{max_rounds})…")
+        last = text.strip()[-160:].replace("\n", " ")
+        try:
+            more = session.ask(
+                f"Tiếp tục {lang} từ ĐÚNG chỗ vừa dừng (ngay sau đoạn: \"…{last}\") {scope}. Không lặp lại phần đã "
+                f"viết, không lời dẫn. Nếu đã viết hết thì chỉ trả lời đúng một từ: HẾT")
+        except (GeminiLimitError, GeminiCancelled):
+            raise
+        except GeminiError as e:
+            job.log(f"   (dừng bước tiếp tục: {e})")
+            break
+        if re.fullmatch(r"\W*(HẾT|HET|END|DONE)\W*", more.strip(), re.I) or len(more.strip()) < 40:
+            break
+        merged = merge_continuation(text, more)
+        if len(merged) <= len(text) + 40:
+            break
+        text = merged
+    return re.sub(r"\n?\s*\bHẾT\W*$", "", text.strip()).strip()
+
+
 def process_unit_yt(job, session, article, code):
     cfg = job.data
     res = cfg["results"][rkey(article["id"], code)]
@@ -569,51 +617,47 @@ def process_unit_yt(job, session, article, code):
         with open(p, "r", encoding="utf-8") as f:
             src = f.read().strip()
 
-    text = session.ask(yt_prompt(cfg, article, code))
-    if not text.strip():
-        raise GeminiError("NotebookLM trả về nội dung rỗng.")
-
-    # Độ dài mục tiêu: theo phụ đề (bỏ từ đệm nên lấy ~75%). Không có phụ đề thì dựa vào câu trả lời 'HẾT'.
+    # Video dài: làm theo từng phần (~12.000 ký tự phụ đề/phần) để không bị NotebookLM cắt ngắn/tóm tắt.
     import yt_util
-    if src and (cfg.get("nb") or {}).get("style") != "summary":
-        if code == "SAME":
-            mcode = yt_util.lang_to_code(article.get("lang"))
-            want, unit = locales.target_units(src, mcode, 0.75)
-        else:
-            mcode = code
-            want, unit = locales.target_units(src, code, 0.75)
-    else:
-        mcode, want, unit = code, 0, ""
+    mcode = yt_util.lang_to_code(article.get("lang")) if code == "SAME" else code
     lang = "văn bản" if code == "SAME" else VI_LANG.get(code, code)
-    for rnd in range(1, 11):
-        have = locales.measure(text, mcode) if want else 0
-        if want and have >= 0.9 * want:
-            break
-        if want:
-            job.log(f"   ↪ mới {have:,}/{want:,} {unit} — nhắn 'Tiếp tục' ({rnd}/10)…")
-        elif rnd > 1:
-            pass
-        last = text.strip()[-160:].replace("\n", " ")
-        res["chunks_total"] = rnd + 1
+    base = yt_prompt(cfg, article, code)
+    parts = split_plain(src, YT_PART_CHARS) if src else [None]
+    res["chunks_total"] = len(parts)
+    job.save()
+    if len(parts) > 1:
+        job.log(f"   Phụ đề dài {len(src):,} ký tự — chia {len(parts)} phần để viết đầy đủ.")
+    outs = []
+    for i, part in enumerate(parts, start=1):
+        if len(parts) == 1:
+            prompt = base
+        else:
+            prompt = (base + f"\n\nVideo dài nên làm theo từng phần. Đây là PHẦN {i}/{len(parts)} của phụ đề (nối tiếp "
+                      "phần trước). CHỈ xử lý đúng đoạn phụ đề dưới đây, đầy đủ từ câu đầu tới câu cuối của đoạn này, "
+                      "không viết lại phần khác, không mở đầu/kết luận riêng cho phần:\n<<<\n" + part + "\n>>>")
+            job.log(f"   phần {i}/{len(parts)} ({len(part):,} ký tự phụ đề)…")
+        t = ""
+        for attempt in (1, 2):
+            try:
+                t = session.ask(prompt)
+                if t.strip():
+                    break
+                raise GeminiError("NotebookLM trả về nội dung rỗng.")
+            except (GeminiLimitError, GeminiCancelled):
+                raise
+            except GeminiError as e:
+                job.log(f"   ⚠️ {e}")
+                if attempt == 2:
+                    raise
+                time.sleep(5)
+        want = locales.target_units(part, mcode, 0.75)[0] if part else 0
+        t = _yt_continue(job, session, t, want, mcode, lang, 10 if len(parts) == 1 else 4, len(parts) > 1)
+        outs.append(t)
+        res["chunks_done"] = i
         job.save()
-        try:
-            more = session.ask(
-                f"Tiếp tục {lang} từ ĐÚNG chỗ vừa dừng (ngay sau đoạn: \"…{last}\") cho tới hết video. Không lặp lại "
-                f"phần đã viết, không lời dẫn. Nếu đã viết hết toàn bộ video thì chỉ trả lời đúng một từ: HẾT")
-        except (GeminiLimitError, GeminiCancelled):
-            raise
-        except GeminiError as e:
-            job.log(f"   (dừng bước tiếp tục: {e})")
-            break
-        if re.fullmatch(r"\W*(HẾT|HET|END|DONE)\W*", more.strip(), re.I) or len(more.strip()) < 40:
-            break
-        merged = merge_continuation(text, more)
-        if len(merged) <= len(text) + 40:
-            break
-        text = merged
-    text = re.sub(r"\n?\s*\bHẾT\W*$", "", text.strip()).strip()
-    if want and locales.measure(text, mcode) < 0.6 * want:
-        job.log(f"   ⚠️ bản ra có vẻ ngắn so với phụ đề — sếp kiểm tra lại.")
+    text = "\n\n".join(o.strip() for o in outs if o.strip())
+    if src and locales.measure(text, mcode) < 0.6 * locales.target_units(src, mcode, 0.75)[0]:
+        job.log("   ⚠️ bản ra có vẻ ngắn so với phụ đề — sếp kiểm tra lại.")
 
     if (cfg.get("nb") or {}).get("review_level", "fast") != "off":
         try:
