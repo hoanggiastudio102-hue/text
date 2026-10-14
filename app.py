@@ -1533,9 +1533,15 @@ def _agent_loop():
                 jid = _active_job_id()
                 prof = os.path.join(APP_DIR, "profiles", gemini_client.DEFAULT_PROFILE
                                     if hasattr(gemini_client, "DEFAULT_PROFILE") else "gemini_profile")
+                try:   # tài khoản Google (Gemini/NotebookLM) đang đăng nhập trên máy này -> sếp thấy trong Đội Máy
+                    ga = gemini_client.load_accounts().get("gemini_profile") or {}
+                    google = ("chưa đăng nhập" if ga.get("logged_in") is False else
+                              " ".join(x for x in (ga.get("name"), f"({ga['email']})" if ga.get("email") else "") if x))
+                except Exception:
+                    google = ""
                 state = {"job": jid, "model": gemini_client.get_model_name(),
                          "gemini_logged_in": os.path.isdir(prof) and bool(os.listdir(prof)),
-                         "os": _platform.system(), "version": "2"}
+                         "google": google, "os": _platform.system(), "version": "2"}
                 fleet.agent_ping(state)
                 _AGENT_STATE["last_ping"] = time.time()
                 _AGENT_STATE["error"] = ""

@@ -105,13 +105,14 @@
             const day = a.created ? new Date(a.created * 1000).toLocaleString('vi-VN', { hour12: false }) : '—';
             return `<tr><td><b>${esc(a.username)}</b></td>
                 <td>${esc(a.display_name)} <button class="fl-link" data-act="rename" data-u="${esc(a.username)}" title="Đổi tên hiển thị"><i class="fa-solid fa-pen"></i></button></td>
+                <td>${a.state && a.state.google ? esc(a.state.google) : (a.last_login ? '<span class="lz-muted">chưa báo</span>' : '—')}</td>
                 <td>${role}</td>
                 <td>${st}<div class="lz-muted">${conn}${gem}</div></td>
                 <td>${day}</td>
                 <td class="fl-acts"><button class="btn-primary fl-mini" data-act="${a.locked ? 'unlock' : 'lock'}" data-u="${esc(a.username)}"><i class="fa-solid fa-lock${a.locked ? '-open' : ''}"></i> ${a.locked ? 'Mở khoá' : 'Khoá'}</button>
                 <button class="btn-primary fl-mini" data-act="pass" data-u="${esc(a.username)}"><i class="fa-solid fa-key"></i> Đổi mật khẩu</button>
                 <button class="btn-primary fl-danger fl-mini" data-act="del" data-u="${esc(a.username)}" title="Xoá tài khoản"><i class="fa-solid fa-trash"></i></button></td></tr>`;
-        }).join('') : '<tr><td colspan="6" class="lz-muted">Không có tài khoản nào khớp.</td></tr>';
+        }).join('') : '<tr><td colspan="7" class="lz-muted">Không có tài khoản nào khớp.</td></tr>';
     }
     function showCred(title, acc, pw) {
         $('flAccModalTitle').textContent = title;
