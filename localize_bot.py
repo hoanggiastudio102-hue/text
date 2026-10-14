@@ -548,8 +548,12 @@ def yt_open_article(job, session, article):
         up_dir = os.path.join(job.dir, "upload")
         os.makedirs(up_dir, exist_ok=True)
         path = os.path.join(up_dir, f"{article['name']}.txt")
+        parts = split_plain(text, YT_PART_CHARS)
         with open(path, "w", encoding="utf-8") as f:
-            f.write(text)
+            if len(parts) > 1:   # video dài: đánh dấu từng phần ngay trong nguồn để hỏi theo phần bằng lệnh ngắn
+                f.write("\n\n".join(f"{yt_marker(i, len(parts))}\n{p}" for i, p in enumerate(parts, start=1)))
+            else:
+                f.write(text)
         session.open_article(path, title=title, chat_rules=rules, longer=True)
     else:
         session.open_article(None, title=title, chat_rules=rules, longer=True, url=url)
@@ -557,6 +561,10 @@ def yt_open_article(job, session, article):
 
 
 YT_PART_CHARS = 12000
+
+
+def yt_marker(i, n):
+    return f"===== PHẦN {i:02d}/{n:02d} ====="
 
 
 def split_plain(text, n):
@@ -632,9 +640,13 @@ def process_unit_yt(job, session, article, code):
         if len(parts) == 1:
             prompt = base
         else:
-            prompt = (base + f"\n\nVideo dài nên làm theo từng phần. Đây là PHẦN {i}/{len(parts)} của phụ đề (nối tiếp "
-                      "phần trước). CHỈ xử lý đúng đoạn phụ đề dưới đây, đầy đủ từ câu đầu tới câu cuối của đoạn này, "
-                      "không viết lại phần khác, không mở đầu/kết luận riêng cho phần:\n<<<\n" + part + "\n>>>")
+            words = part.split()
+            head, tail = " ".join(words[:22]), " ".join(words[-22:])
+            prompt = (base + f"\n\nVideo dài nên làm theo từng phần. Trong nguồn, phụ đề đã được chia sẵn bằng các dòng "
+                      f"đánh dấu dạng '{yt_marker(1, len(parts))}'. Lần này CHỈ xử lý ĐÚNG phần "
+                      f"'{yt_marker(i, len(parts))}': bắt đầu từ \"{head}…\" và kết thúc ở \"…{tail}\". Viết đầy đủ "
+                      "từ câu đầu tới câu cuối của phần này; không viết phần khác, không chép dòng đánh dấu, không mở đầu "
+                      "hay kết luận riêng cho phần.")
             job.log(f"   phần {i}/{len(parts)} ({len(part):,} ký tự phụ đề)…")
         t, err = "", None
         for attempt in (1, 2):
@@ -665,6 +677,7 @@ def process_unit_yt(job, session, article, code):
         outs.append(t)
         res["chunks_done"] = i
         job.save()
+    outs = [re.sub(r"^\s*=+\s*PHẦN\s*\d+/\d+\s*=+\s*$\n?", "", o, flags=re.M) for o in outs]
     if parts and len(failed_parts) == len(parts):
         raise GeminiError("Tất cả các phần đều lỗi.")
     if failed_parts:

@@ -24,7 +24,7 @@ NB_HOME = "https://notebook.google.com/"
 
 # Nhãn có cả tiếng Việt lẫn tiếng Anh để đổi ngôn ngữ giao diện vẫn chạy.
 RX_NEW = re.compile(r"Sổ ghi chú mới|New notebook|Create new", re.I)
-RX_ADD = re.compile(r"Thêm nguồn|Add source", re.I)
+RX_ADD = re.compile(r"^\s*(add\s+)?(Thêm nguồn|Nguồn|Add sources?|Sources?)\s*$", re.I)
 RX_PASTE = re.compile(r"Văn bản đã sao chép|Copied text|Paste text", re.I)
 RX_INSERT = re.compile(r"^\s*(Chèn|Insert)\s*$", re.I)
 RX_PASTE_BOX = re.compile(r"Dán văn bản|Paste (your )?text", re.I)
@@ -259,47 +259,103 @@ class NotebookSession:
         self._wait_chat_ready()
         self._need_new = False
 
-    def _add_source(self, text):
-        page = self.page
-        box = page.get_by_placeholder(RX_PASTE_BOX).first
-        try:
-            visible = box.is_visible()
-        except Exception:
-            visible = False
-        if not visible:
-            opt = page.get_by_text(RX_PASTE).first
+    # --- tiện ích chọn đúng phần tử ĐANG HIỂN THỊ (NotebookLM giữ sẵn các hộp ẩn trùng tên trong trang) ---------
+    def _vis(self, loc, timeout=0):
+        """Phần tử đầu tiên đang hiển thị trong loc (chờ tối đa timeout giây), không có thì None."""
+        t0 = time.time()
+        while True:
             try:
-                opt_visible = opt.is_visible()
+                n = loc.count()
+                for i in range(min(n, 20)):
+                    el = loc.nth(i)
+                    if el.is_visible():
+                        return el
             except Exception:
-                opt_visible = False
-            if not opt_visible:
-                page.get_by_role("button", name=RX_ADD).first.click()
-                time.sleep(1)
-            page.get_by_text(RX_PASTE).first.click()
-        try:
-            box.wait_for(timeout=15000)
-        except Exception:
-            self._debug("không mở được ô dán nguồn")
-            raise GeminiError("Không mở được hộp 'Văn bản đã sao chép' của NotebookLM.")
-        box.fill(text)
-        time.sleep(0.8)
-        btn = page.get_by_role("button", name=RX_INSERT).first
-        btn.click()
-        try:
-            box.wait_for(state="hidden", timeout=90000)
-        except Exception:
-            self._debug("nguồn chưa chèn xong")
-            raise GeminiError("NotebookLM không chèn được nguồn (quá thời gian chờ).")
-        time.sleep(4)
-        self._dismiss_intro()
-        self.on_tick()
+                pass
+            if time.time() - t0 >= timeout:
+                return None
+            time.sleep(0.5)
 
-    # --- luồng "như sếp làm tay": 1 bài = 1 sổ, bài gốc tải lên dạng tệp -------------------------------
     def _visible(self, loc):
         try:
             return loc.is_visible()
         except Exception:
             return False
+
+    def _close_dialogs(self):
+        """Đóng hộp thoại đang mở (sau lỗi) để thao tác sau không bị chặn."""
+        page = self.page
+        for _ in range(3):
+            try:
+                dlg = self._vis(page.locator("[role=dialog], mat-dialog-container"))
+                if not dlg:
+                    return
+                btn = self._vis(dlg.get_by_role("button", name=re.compile(r"^(Đóng|Close)$", re.I)))
+                if btn:
+                    btn.click()
+                else:
+                    page.keyboard.press("Escape")
+                time.sleep(0.8)
+            except Exception:
+                return
+
+    def _open_add_option(self, rx_option):
+        """Mở hộp 'Thêm nguồn' (nút có thể tên 'Thêm nguồn' hoặc '+ Nguồn') rồi bấm lựa chọn rx_option."""
+        page = self.page
+        opt = self._vis(page.get_by_role("button", name=rx_option)) or self._vis(page.get_by_text(rx_option))
+        if not opt:
+            self._close_dialogs()
+            add = self._vis(page.get_by_role("button", name=RX_ADD), timeout=10)
+            if not add:
+                self._debug("không thấy nút Thêm nguồn")
+                raise GeminiError("Không thấy nút 'Thêm nguồn' của NotebookLM.")
+            add.click()
+            opt = (self._vis(page.get_by_role("button", name=rx_option), timeout=10) or
+                   self._vis(page.get_by_text(rx_option), timeout=2))
+        if not opt:
+            self._debug("không thấy lựa chọn thêm nguồn")
+            raise GeminiError("Không thấy lựa chọn thêm nguồn của NotebookLM.")
+        return opt
+
+    def _insert_and_wait(self, box, before, what, timeout=240):
+        page = self.page
+        ins = self._vis(page.get_by_role("button", name=RX_INSERT), timeout=10)
+        if not ins:
+            self._debug("không thấy nút Chèn")
+            self._close_dialogs()
+            raise GeminiError("Không thấy nút 'Chèn' của NotebookLM.")
+        ins.click()
+        t0 = time.time()
+        while time.time() - t0 < 90 and self._visible(box):
+            self._check_cancel()
+            self.on_tick()
+            time.sleep(1)
+        if self._visible(box):
+            self._debug(f"{what} chưa chèn xong")
+            self._close_dialogs()
+            raise GeminiError(f"NotebookLM không nhận {what} (quá thời gian chờ).")
+        if before is not None and not self._wait_sources(before + 1, timeout=timeout):
+            self._debug(f"{what} chưa thành nguồn")
+            raise GeminiError(f"NotebookLM chưa xử lý xong {what} (quá thời gian chờ).")
+        time.sleep(2)
+        self._dismiss_intro()
+        self.on_tick()
+
+    def _add_source(self, text):
+        """Thêm nguồn > Văn bản đã sao chép > dán > Chèn."""
+        page = self.page
+        before = max(0, self._source_count())
+        box = self._vis(page.get_by_placeholder(RX_PASTE_BOX))
+        if not box:
+            self._open_add_option(RX_PASTE).click()
+            box = self._vis(page.get_by_placeholder(RX_PASTE_BOX), timeout=15)
+        if not box:
+            self._debug("không mở được ô dán nguồn")
+            self._close_dialogs()
+            raise GeminiError("Không mở được hộp 'Văn bản đã sao chép' của NotebookLM.")
+        box.fill(text)
+        time.sleep(0.8)
+        self._insert_and_wait(box, before if before >= 0 else None, "văn bản nguồn", timeout=180)
 
     def _source_count(self):
         try:
@@ -322,51 +378,32 @@ class NotebookSession:
         """Thêm nguồn > Tải tệp lên > chọn file (đúng như sếp làm tay)."""
         page = self.page
         before = max(0, self._source_count())
-        up = page.get_by_role("button", name=RX_UPLOAD).first
-        if not self._visible(up):
-            up = page.get_by_text(RX_UPLOAD).first
-        if not self._visible(up):
-            page.get_by_role("button", name=RX_ADD).first.click()
-            time.sleep(1.2)
-            up = page.get_by_role("button", name=RX_UPLOAD).first
-            if not self._visible(up):
-                up = page.get_by_text(RX_UPLOAD).first
+        up = self._open_add_option(RX_UPLOAD)
         with page.expect_file_chooser(timeout=15000) as fc:
             up.click()
         fc.value.set_files(path)
         if not self._wait_sources(before + 1):
             self._debug("tệp tải lên chưa thành nguồn")
+            self._close_dialogs()
             raise GeminiError("NotebookLM chưa nhận tệp bài gốc (quá thời gian chờ).")
+        self._close_dialogs()
         self._dismiss_intro()
 
     def _add_url(self, url):
         """Thêm nguồn > Trang web (YouTube) > dán link > Chèn. NotebookLM tự lấy bản chép lời của video."""
         page = self.page
         before = max(0, self._source_count())
-        box = page.get_by_placeholder(RX_URL_BOX).first
-        if not self._visible(box):
-            web = page.get_by_role("button", name=RX_WEB).first
-            if not self._visible(web):
-                page.get_by_role("button", name=RX_ADD).first.click()
-                time.sleep(1.2)
-                web = page.get_by_role("button", name=RX_WEB).first
-            web.click()
-        try:
-            box.wait_for(timeout=15000)
-        except Exception:
+        box = self._vis(page.get_by_placeholder(RX_URL_BOX))
+        if not box:
+            self._open_add_option(RX_WEB).click()
+            box = self._vis(page.get_by_placeholder(RX_URL_BOX), timeout=15)
+        if not box:
             self._debug("không mở được ô dán link")
+            self._close_dialogs()
             raise GeminiError("Không mở được hộp 'URL trang web và YouTube' của NotebookLM.")
         box.fill(url)
         time.sleep(0.8)
-        page.get_by_role("button", name=RX_INSERT).first.click()
-        try:
-            box.wait_for(state="hidden", timeout=90000)
-        except Exception:
-            self._debug("link chưa chèn xong")
-            raise GeminiError("NotebookLM không nhận link YouTube (quá thời gian chờ).")
-        if not self._wait_sources(before + 1, timeout=240):
-            self._debug("video chưa thành nguồn")
-            raise GeminiError("NotebookLM chưa lấy được bản chép lời của video (video riêng tư/không có phụ đề?).")
+        self._insert_and_wait(box, before, "link YouTube", timeout=240)
         self._dismiss_intro()
 
     def configure_chat(self, rules="", longer=True):
@@ -455,7 +492,7 @@ class NotebookSession:
             self._check_cancel()
             self.on_tick()
             try:
-                el = self.page.locator(QUERY_BOX).first
+                el = self._qbox()
                 if el.is_visible() and el.is_enabled():
                     return
             except Exception:
@@ -479,10 +516,13 @@ class NotebookSession:
         except Exception:
             return -1
 
+    def _qbox(self):
+        return self._vis(self.page.locator(QUERY_BOX)) or self.page.locator(QUERY_BOX).first
+
     def _send_disabled(self):
         """Nút Gửi của ô chat bị khoá (thường do lệnh quá dài)."""
         try:
-            return bool(self.page.locator(QUERY_BOX).first.evaluate("""e => {
+            return bool(self._qbox().evaluate("""e => {
                 let p = e;
                 for (let i = 0; i < 6 && p; i++, p = p.parentElement) {
                     const b = Array.from(p.querySelectorAll('button')).find(x =>
@@ -501,7 +541,7 @@ class NotebookSession:
         tag = f"[LỆNH #{self._cmd}]"
         self.log(f"   (lệnh dài {len(full):,} ký tự — đưa vào nguồn {tag})")
         try:
-            page.locator(QUERY_BOX).first.fill("")
+            self._qbox().fill("")
         except Exception:
             pass
         self._add_source(tag + "\n" + full)
@@ -509,13 +549,23 @@ class NotebookSession:
         short = (("" if self.custom_ok else PROMPT_RULES) +
                  f"Thực hiện đầy đủ, chính xác chỉ dẫn trong nguồn có dòng đầu là {tag} (nguồn mới nhất). "
                  f"Chỉ trả về kết quả hoàn chỉnh.")
-        box = page.locator(QUERY_BOX).first
+        box = self._qbox()
         box.click()
         box.fill(short)
         time.sleep(0.5)
         page.keyboard.press("Enter")
 
     def ask(self, prompt, timeout=1500, first_token_timeout=240):
+        try:
+            return self._ask(prompt, timeout, first_token_timeout)
+        except (GeminiError, GeminiCancelled):
+            raise
+        except Exception as e:      # lỗi Playwright (Timeout...) -> đóng hộp thoại kẹt rồi báo lỗi rõ ràng
+            self._debug("lỗi thao tác")
+            self._close_dialogs()
+            raise GeminiError(f"NotebookLM thao tác lỗi: {type(e).__name__}: {str(e)[:160]}")
+
+    def _ask(self, prompt, timeout=1500, first_token_timeout=240):
         self._check_cancel()
         page = self.page
         try:
@@ -524,7 +574,7 @@ class NotebookSession:
             pass
         if self._need_new:
             self._create_notebook()
-        box = page.locator(QUERY_BOX).first
+        box = self._qbox()
         full = prompt if self.custom_ok else PROMPT_RULES + prompt
         before = len(page.query_selector_all(ANSWER_SEL))
 
@@ -552,7 +602,7 @@ class NotebookSession:
             elems = page.query_selector_all(ANSWER_SEL)
             if len(elems) <= before:
                 # Ô chat vẫn còn nguyên lệnh (không gửi được, VD vượt giới hạn ký tự) -> chuyển sang cách đưa vào nguồn
-                if not via_source and now - t0 > 25 and self._typed_len(page.locator(QUERY_BOX).first) > 100:
+                if not via_source and now - t0 > 25 and self._typed_len(self._qbox()) > 100:
                     self.log("   (ô chat không gửi được lệnh — chuyển sang đưa lệnh vào nguồn)")
                     self._send_via_source(full)
                     via_source, t0 = True, time.time()
@@ -565,7 +615,7 @@ class NotebookSession:
                 text = elems[-1].evaluate(_JS_TEXT)
             except Exception:
                 continue
-            generating = self._is_generating(page.locator(QUERY_BOX).first)
+            generating = self._is_generating(self._qbox())
             saw_generating = saw_generating or generating
             if len(text) != last_len:
                 last_len, changed_at = len(text), now
