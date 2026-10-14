@@ -402,6 +402,7 @@
         fd.append('perLine', $('lzPerLine') && $('lzPerLine').checked ? '1' : '');
         fd.append('profileName', profileName());
         fd.append('ai', $('lzAi') ? $('lzAi').value : 'gemini');
+        if (window.expertAppend) window.expertAppend('lz', fd, $('lzAi') ? $('lzAi').value : 'gemini');
         return fd;
     }
     function validateInput() {
@@ -536,6 +537,7 @@
             const dl = $('lzPreviewDl');
             dl.href = `/api/localize/${jobId}/file?f=${encodeURIComponent(file)}`;
             dl.setAttribute('download', file.split('/').pop());
+            if (window.showReview) window.showReview($('lzReviewBox'), jobId, file);
             poll();
             $('lzPreviewBox').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         } catch (e) { toast('Lỗi kết nối tới máy chủ', true); }

@@ -742,6 +742,25 @@ def _job_dir(job_id):
     return d if os.path.isdir(d) else None
 
 
+def _expert_opts(form):
+    """Tuỳ chọn 'Viết chuyên gia' từ form (dùng chung cho Tái Sáng Tạo, ChatGPT, Claude)."""
+    on = lambda k, d=False: (form.get(k) in ("1", "true", "on")) if form.get(k) is not None else d
+    try:
+        cross = [c for c in json.loads(form.get("exCross") or "[]") if c in ("gemini", "chatgpt", "claude")]
+    except ValueError:
+        cross = []
+    try:
+        words = max(0, min(30000, int(form.get("exWords") or 0)))
+    except ValueError:
+        words = 0
+    lt = form.get("exLt") if form.get("exLt") in ("off", "local", "online") else "off"
+    url = (form.get("exLtUrl") or "").strip() or "http://localhost:8081/v2/check"
+    if not url.startswith(("http://localhost", "http://127.0.0.1")):
+        url = "http://localhost:8081/v2/check"
+    return {"on": on("expert"), "self": on("exSelf", True), "cross": cross, "human": on("exHuman", True),
+            "machine": on("exMachine", True), "lt": lt, "lt_url": url, "outline": on("exOutline"), "words": words}
+
+
 def _read_text_upload(file_storage):
     raw = file_storage.read()
     for enc in ("utf-8-sig", "utf-16"):
@@ -1086,6 +1105,7 @@ def api_localize_start():
         "keywords": form.get("keywords", ""), "glossary": form.get("glossary", ""),
         "extra": form.get("extra", "").strip(), "review": form.get("review") in ("1", "true", "on"),
         "chunk_size": chunk_size, "profile": (form.get("profileName") or "gemini_profile").strip() or "gemini_profile",
+        "expert": _expert_opts(form),
         "ai": web_chat.provider_of(form.get("ai")), "model": web_chat.get_model(form.get("ai")),
         "ai_profile": web_chat.PROVIDERS[web_chat.provider_of(form.get("ai"))]["profile"],
         "thinking": gemini_client.get_thinking_level() if web_chat.provider_of(form.get("ai")) == "gemini" else "",
@@ -1119,8 +1139,25 @@ def api_localize_status(job_id):
     slim = {k: data.get(k) for k in ("id", "state", "error", "articles", "countries", "results", "current",
                                      "zip", "review", "dry_run", "model", "thinking", "mode",
                                      "started_at", "finished_at", "created_at")}
+    slim["results"] = {k: {x: y for x, y in (r or {}).items() if x != "review_items"}
+                       for k, r in (data.get("results") or {}).items()}     # danh sách lỗi lấy riêng khi xem
     slim["log_tail"] = tail
     return jsonify({"status": "success", "job": slim})
+
+
+@app.route("/api/localize/<job_id>/review")
+def api_localize_review(job_id):
+    """Báo cáo đoạn lỗi của 1 kết quả (Viết chuyên gia): danh sách mục + nội dung file báo cáo."""
+    d = _job_dir(job_id)
+    if not d:
+        return jsonify({"status": "error", "message": "Không tìm thấy job."}), 404
+    data = _read_json(os.path.join(d, "job.json"))
+    f = request.args.get("f") or ""
+    r = next((r for r in (data.get("results") or {}).values() if r.get("file") == f), None)
+    if not r:
+        return jsonify({"status": "error", "message": "Không tìm thấy kết quả."}), 404
+    return jsonify({"status": "success", "items": r.get("review_items") or [], "summary": r.get("review_summary") or {},
+                    "report": r.get("report") or ""})
 
 
 @app.route("/api/localize/<job_id>/cancel", methods=["POST"])
@@ -1456,6 +1493,7 @@ def api_aichat_run():
         arts.append({"id": f"a{i}", "name": n, "file": fname, "chars": len(text)})
     job = {
         "id": job_id, "created_at": time.time(), "state": "queued", "error": "", "engine": "aichat", "ai": ai,
+        "expert": _expert_opts(form),
         "aichat": {"prompt": prompt, "chat_mode": "same" if form.get("chatMode") == "same" else "new",
                    "chunk": to_int(form.get("chunk"), 12000, 3000, 60000),
                    "delay_min": to_int(form.get("delayMin"), 5, 0, 600), "delay_max": to_int(form.get("delayMax"), 15, 0, 900),

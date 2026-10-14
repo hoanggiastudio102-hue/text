@@ -150,3 +150,99 @@
     if (tab) tab.addEventListener('click', load);
     load();
 })();
+
+/* ===== "Viết chuyên gia": khung tuỳ chọn dùng chung + bảng báo cáo đoạn lỗi ===== */
+(function () {
+    'use strict';
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const AIS = [['gemini', 'Gemini'], ['chatgpt', 'ChatGPT'], ['claude', 'Claude']];
+
+    window.expertPanelHTML = function (P, withOutline) {
+        return `<div class="ex-box">
+            <label class="lz-check"><input type="checkbox" id="${P}Ex"> <span><b>🎓 Viết chuyên gia</b> — nhiều bước: ${withOutline ? 'lập kế hoạch từ dàn ý → viết từng phần → ' : ''}tự soát → AI khác soát chéo → sửa văn AI cho giống người → máy kiểm tra; báo cáo từng đoạn lỗi (chậm hơn, tốn thêm lượt)</span></label>
+            <div id="${P}ExOpts" class="ex-opts" style="display:none;">
+                ${withOutline ? `<label class="lz-check"><input type="checkbox" id="${P}ExOutline"> <span><b>Mỗi mục là một DÀN Ý</b> → AI lập kế hoạch (mục + số chữ + ý bắt buộc) rồi viết lần lượt từng mục</span></label>
+                <div class="fl-inline ex-words"><span class="lz-muted">Tổng độ dài mong muốn</span><input type="number" id="${P}ExWords" class="glass-input" min="0" max="30000" placeholder="số từ — để trống = AI tự chọn"></div>` : ''}
+                <label class="lz-check"><input type="checkbox" id="${P}ExSelf" checked> <span><b>Tự soát</b> — AI viết tự phê bình, sửa lỗi và bổ sung ý thiếu (tối đa 2 vòng)</span></label>
+                <div class="ex-cross"><span><b>Soát chéo bằng AI khác</b> <span class="lz-muted">(AI đang viết tự bỏ qua; ≥2 AI thì AI viết làm "chủ tịch" chốt)</span></span>
+                    <div class="ex-chips">${AIS.map(([k, n]) => `<label class="ex-chip"><input type="checkbox" class="ex-cross-cb" data-ai="${k}" id="${P}ExX_${k}"> ${n}</label>`).join('')}</div></div>
+                <label class="lz-check"><input type="checkbox" id="${P}ExHuman" checked> <span><b>Sửa văn AI cho giống người viết</b> — bỏ câu sáo, nhịp đều, từ phóng đại, lời thừa chatbot (giữ nguyên dữ kiện)</span></label>
+                <label class="lz-check"><input type="checkbox" id="${P}ExMachine" checked> <span><b>Máy kiểm tra cuối</b> — số liệu, chữ ngôn ngữ khác, đoạn lệch, dấu hiệu văn AI còn sót</span></label>
+                <div class="fl-inline ex-lt"><span class="lz-muted">LanguageTool (chính tả/ngữ pháp)</span>
+                    <select id="${P}ExLt" class="glass-input"><option value="off">Tắt</option><option value="local">Máy này (cần chạy LanguageTool ở localhost:8081)</option><option value="online">Online miễn phí (gửi văn bản lên languagetool.org)</option></select></div>
+            </div></div>`;
+    };
+
+    window.expertInit = function (P, getWriter) {
+        const $ = (id) => document.getElementById(P + id);
+        if (!$('Ex')) return;
+        const KEY = 'expert_' + P;
+        const boxes = ['Ex', 'ExOutline', 'ExSelf', 'ExHuman', 'ExMachine'].filter((k) => $(k));
+        try {
+            const sv = JSON.parse(localStorage.getItem(KEY) || '{}');
+            boxes.forEach((k) => { if (sv[k] != null) $(k).checked = sv[k]; });
+            if (sv.lt) $('ExLt').value = sv.lt;
+            if (sv.words != null && $('ExWords')) $('ExWords').value = sv.words;
+            AIS.forEach(([k]) => { if (sv['x_' + k] != null) $('ExX_' + k).checked = sv['x_' + k]; });
+        } catch (e) { /* bỏ qua */ }
+        const sync = () => {
+            $('ExOpts').style.display = $('Ex').checked ? '' : 'none';
+            const w = getWriter();
+            AIS.forEach(([k]) => { const cb = $('ExX_' + k); cb.disabled = k === w; cb.parentElement.classList.toggle('off', k === w); });
+            try {
+                const o = { lt: $('ExLt').value, words: $('ExWords') ? $('ExWords').value : '' };
+                boxes.forEach((k) => o[k] = $(k).checked);
+                AIS.forEach(([k]) => o['x_' + k] = $('ExX_' + k).checked);
+                localStorage.setItem(KEY, JSON.stringify(o));
+            } catch (e) { /* bỏ qua */ }
+        };
+        $('ExOpts').parentElement.addEventListener('change', sync);
+        $('ExOpts').parentElement.addEventListener('input', sync);
+        sync();
+        return sync;
+    };
+
+    window.expertAppend = function (P, fd, writer) {
+        const $ = (id) => document.getElementById(P + id);
+        if (!$('Ex') || !$('Ex').checked) return;
+        fd.append('expert', '1');
+        fd.append('exSelf', $('ExSelf').checked ? '1' : '0');
+        fd.append('exHuman', $('ExHuman').checked ? '1' : '0');
+        fd.append('exMachine', $('ExMachine').checked ? '1' : '0');
+        fd.append('exLt', $('ExLt').value);
+        fd.append('exCross', JSON.stringify(AIS.map(([k]) => k).filter((k) => k !== writer && $('ExX_' + k).checked)));
+        if ($('ExOutline')) fd.append('exOutline', $('ExOutline').checked ? '1' : '0');
+        if ($('ExWords')) fd.append('exWords', $('ExWords').value || '0');
+    };
+
+    const STEP_CLS = { 'Tự soát': 'self', 'Soát chéo': 'cross', 'Văn AI → người': 'human', 'Máy kiểm tra': 'machine' };
+    window.showReview = async function (box, jobId, file) {
+        if (!box) return;
+        box.innerHTML = '';
+        try {
+            const d = await (await fetch(`/api/localize/${jobId}/review?f=${encodeURIComponent(file)}`)).json();
+            if (d.status !== 'success' || !(d.items || []).length) { box.style.display = 'none'; return; }
+            const items = d.items, done = items.filter((x) => x.applied), todo = items.filter((x) => !x.applied);
+            const row = (x) => `<details class="rv-row ${x.applied ? 'ok' : 'todo'}">
+                <summary><span class="rv-step ${STEP_CLS[x.step] || ''}">${esc(x.step)}</span> <b>Đoạn ${esc(x.p)}</b>
+                    <span class="lz-muted">${esc(x.ai)}</span> — ${esc(x.issue)} ${x.applied ? '<span class="rv-badge ok">đã sửa</span>' : '<span class="rv-badge todo">sếp xem</span>'}</summary>
+                ${x.old ? (x.new || x.applied ? `<div class="rv-old"><span>Trước</span>${esc(x.old)}</div>` : `<div class="rv-cur"><span>Chỗ cần xem</span>${esc(x.old)}</div>`) : ''}
+                ${x.new ? `<div class="rv-new"><span>${x.applied ? 'Sau' : 'Đề xuất'}</span>${esc(x.new)}</div>` : ''}</details>`;
+            box.innerHTML = `<div class="rv-head"><i class="fa-solid fa-clipboard-check"></i> Báo cáo đoạn lỗi — đã sửa <b>${done.length}</b>, cần xem <b>${todo.length}</b>
+                ${d.report ? `<a class="ai-goto" href="/api/localize/${jobId}/file?f=${encodeURIComponent(d.report)}" download>tải báo cáo .txt</a>` : ''}</div>
+                ${todo.length ? `<div class="rv-sec">Cần sếp xem lại</div>${todo.map(row).join('')}` : ''}
+                ${done.length ? `<div class="rv-sec">Đã tự sửa</div>${done.map(row).join('')}` : ''}`;
+            box.style.display = '';
+        } catch (e) { box.style.display = 'none'; }
+    };
+})();
+
+(function () {
+    'use strict';
+    const slot = document.getElementById('lzExpertSlot');
+    if (!slot || !window.expertPanelHTML) return;
+    slot.innerHTML = window.expertPanelHTML('lz', false);
+    const ai = document.getElementById('lzAi');
+    const sync = window.expertInit('lz', () => (ai ? ai.value : 'gemini'));
+    if (ai && sync) ai.addEventListener('change', sync);
+})();

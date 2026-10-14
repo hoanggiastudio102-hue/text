@@ -147,7 +147,8 @@ class NotebookSession:
         user_data_dir = os.path.join(BASE_DIR, "profiles", self.profile_name)
         os.makedirs(user_data_dir, exist_ok=True)
         self.log(f"Đang mở trình duyệt (NotebookLM) với tài khoản: {self.profile_name}")
-        self._pw = sync_playwright().start()
+        from gemini_client import pw_acquire
+        self._pw = pw_acquire()
         try:
             from gemini_client import launch_browser
             self.ctx = launch_browser(self._pw, user_data_dir, headless=self.headless, log=self.log)
@@ -173,8 +174,8 @@ class NotebookSession:
         except Exception:
             pass
         try:
-            if self._pw:
-                self._pw.stop()
+            from gemini_client import pw_release
+            pw_release(self._pw)
         except Exception:
             pass
         self.ctx = self._pw = self.page = None

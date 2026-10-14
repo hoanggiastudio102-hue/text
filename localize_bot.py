@@ -115,6 +115,37 @@ def _chunk_len(cfg, article):
     return base
 
 
+WRITER_NAMES = {"gemini": "Gemini", "chatgpt": "ChatGPT", "claude": "Claude"}
+
+
+def expert_finish(job, session, article, code, ref, text, art_dir, base_fname, plan=None):
+    """Chế độ 'Viết chuyên gia': tự soát → hội đồng AI soát chéo → sửa văn AI → máy kiểm tra. Ghi báo cáo đoạn lỗi."""
+    import expert
+    cfg = job.data
+    opts = expert.options(cfg.get("expert"))
+    if not opts["on"]:
+        return text
+    res = cfg["results"][rkey(article["id"], code)]
+    lang = "ngôn ngữ của bài" if code == "SAME" else VI_LANG.get(code, locales.get_country(code)["language"])
+    audience = (cfg.get("audience") or "").strip() or ("" if code == "SAME" else f"người {locales.get_country(code)['name_vi']}")
+    writer = WRITER_NAMES.get(cfg.get("ai") or "gemini", "Gemini")
+    job.log(f"   🎓 Viết chuyên gia: {writer} viết"
+            + (f", hội đồng soát chéo: {', '.join(expert.NAMES[n] for n in job.panel.alive())}" if getattr(job, "panel", None) and job.panel.alive() else ""))
+    mcode = "VN" if code == "SAME" else code
+    final, report, items = expert.polish(job, session, getattr(job, "panel", None), ref, text, mcode, lang, audience, opts,
+                                         writer, plan=plan)
+    rname = re.sub(r"\.txt$", "", base_fname) + "_ra_soat.txt"
+    with open(os.path.join(art_dir, rname), "w", encoding="utf-8") as f:
+        f.write(report)
+    res["report"] = f"{article['id']}/{rname}"
+    res["review_items"] = items[:200]
+    res["review_summary"] = {"applied": sum(1 for x in items if x["applied"]),
+                             "pending": sum(1 for x in items if not x["applied"])}
+    job.log(f"   📋 Báo cáo: sửa {res['review_summary']['applied']} chỗ, {res['review_summary']['pending']} chỗ cần sếp xem "
+            f"-> {rname}")
+    return final
+
+
 def process_unit(job, session, article, code, chunks):
     cfg = job.data
     outline = ""
@@ -207,6 +238,10 @@ def process_unit(job, session, article, code, chunks):
     fname = f"{article['name']}_{code}.txt"
     art_dir = os.path.join(job.files_dir, article["id"])
     os.makedirs(art_dir, exist_ok=True)
+    if (cfg.get("expert") or {}).get("on"):
+        src_all = "\n\n".join(chunks)
+        ref = (f"DÀN Ý:\n{outline}\n\nBÀI GỐC:\n{src_all}" if outline else src_all)
+        final = expert_finish(job, session, article, code, ref, final, art_dir, fname)
     with open(os.path.join(art_dir, fname), "w", encoding="utf-8") as f:
         f.write(final + "\n")
     res.update(status="done", file=f"{article['id']}/{fname}", chars=len(final), finished_at=time.time())
@@ -814,6 +849,17 @@ def process_unit_ai(job, session, article, code):
     mcode = "VN" if code == "SAME" else code
     outs = []
     who = getattr(session, "name", "AI")
+    ex = cfg.get("expert") or {}
+    plan = None
+    if ex.get("on") and ex.get("outline"):
+        import expert
+        lang = "ngôn ngữ của dàn ý" if code == "SAME" else VI_LANG.get(code, locales.get_country(code)["language"])
+        res.update(chunks_total=1)
+        drafted, plan = expert.plan_and_write(job, session, ai_prompt(cfg, article, code, src, 1, 1), mcode, lang,
+                                              int(ex.get("words") or 0))
+        if drafted:
+            outs.append(drafted)
+            parts = []
     for i, part in enumerate(parts, start=1):
         prompt = ai_prompt(cfg, article, code, part, i, len(parts))
         t, err = "", None
@@ -862,6 +908,8 @@ def process_unit_ai(job, session, article, code):
     fname = f"{article['name']}.txt" if code == "SAME" else f"{article['name']}_{code}.txt"
     art_dir = os.path.join(job.files_dir, article["id"])
     os.makedirs(art_dir, exist_ok=True)
+    if ex.get("on"):
+        text = expert_finish(job, session, article, code, src, text, art_dir, fname, plan=plan)
     with open(os.path.join(art_dir, fname), "w", encoding="utf-8") as f:
         f.write(text + "\n")
     res.update(status="done", file=f"{article['id']}/{fname}", chars=len(text), finished_at=time.time())
@@ -990,6 +1038,14 @@ def run_job(job_dir, session_factory=None):
 
     session = None
     chunk_cache = {}
+    job.panel = None
+    ex = cfg.get("expert") or {}
+    if ex.get("on") and ex.get("cross") and cfg.get("engine") in (None, "", "aichat"):
+        import expert
+        writer = cfg.get("ai") or "gemini"
+        names = [n for n in ex["cross"] if n in expert.NAMES and n != writer]
+        if names:
+            job.panel = expert.Panel(job, names, dry=bool(cfg.get("dry_run")))
     try:
         if todo:
             job.log(f"Bắt đầu job {cfg['id'][:8]}: {len(todo)} mục (bài × quốc gia), AI: {ai_name}, model: "
@@ -1080,6 +1136,8 @@ def run_job(job_dir, session_factory=None):
                 session.close()
             except Exception:
                 pass
+        if getattr(job, "panel", None) is not None:
+            job.panel.close()
         for article, code in todo:         # mục chưa chạy tới do job dừng sớm -> đánh dấu rõ nguyên nhân
             r = cfg["results"][rkey(article["id"], code)]
             if r.get("status") == "pending" and cfg.get("error") and not job.cancelled():

@@ -69,6 +69,7 @@
                     <div class="form-group"><label><span>Tên file (tuỳ chọn)</span></label><input type="text" id="${P}Name" class="glass-input" placeholder="VD: Kenh09"></div>
                 </div>
                 <div class="form-group"><label><span>Yêu cầu thêm (tuỳ chọn)</span></label><input type="text" id="${P}Extra" class="glass-input" placeholder="VD: xưng 'bạn', giọng kể chuyện"></div>
+                ${window.expertPanelHTML ? window.expertPanelHTML(P, true) : ''}
                 <div class="lz-checks">
                     <label class="lz-check"><input type="checkbox" id="${P}Cont" checked> <span>Tự nhắn "Tiếp tục" khi câu trả lời bị cụt (bài viết lại/dịch ngắn hơn hẳn bản gốc)</span></label>
                     <label class="lz-check"><input type="checkbox" id="${P}Dry"> <span>Chạy thử — không mở ${NAME}, chỉ kiểm tra luồng và file xuất</span></label>
@@ -94,6 +95,7 @@
                     <label><span id="${P}PreviewTitle">Xem trước</span></label>
                     <textarea id="${P}PreviewText" class="glass-input" rows="14" readonly></textarea>
                     <div class="lz-actions-row"><a id="${P}PreviewDl" href="#" class="btn-primary" download><i class="fa-solid fa-download"></i> Tải file này</a></div>
+                    <div id="${P}ReviewBox" class="rv-box" style="display:none;"></div>
                 </div>
                 <div class="log-container"><h4><i class="fa-solid fa-terminal"></i> Nhật ký job</h4><pre id="${P}Log">...</pre></div>
             </div>
@@ -204,6 +206,7 @@
             fd.append('customFilename', $('Name').value.trim());
             fd.append('autoContinue', $('Cont').checked ? '1' : '');
             fd.append('dryRun', $('Dry').checked ? '1' : '');
+            if (window.expertAppend) window.expertAppend(P, fd, ai);
             $('Start').disabled = true;
             try {
                 const d = await (await fetch('/api/aichat/run', { method: 'POST', body: fd })).json();
@@ -279,6 +282,7 @@
                 $('PreviewBox').style.display = 'block'; $('PreviewTitle').textContent = title; $('PreviewText').value = d.text;
                 $('PreviewDl').href = `/api/localize/${jobId}/file?f=${encodeURIComponent(file)}`;
                 $('PreviewDl').setAttribute('download', file.split('/').pop());
+                if (window.showReview) window.showReview($('ReviewBox'), jobId, file);
                 poll();
             } catch (e) { toast('Lỗi kết nối tới máy chủ', true); }
         }
@@ -302,6 +306,7 @@
         }).catch(() => {});
         const tabBtn = document.querySelector(`.tab-btn[data-tab="${root.id}"]`);
         if (tabBtn) tabBtn.addEventListener('click', () => { loadAccount(); if (!countries.length) loadCountries(); });
+        if (window.expertInit) window.expertInit(P, () => ai);
         loadAccount(); countItems();
         return { renderTemplates, renderCountries, refresh: () => { if (jobId) poll(); } };
     }

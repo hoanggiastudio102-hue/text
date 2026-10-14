@@ -76,6 +76,32 @@ def launch_browser(pw, user_data_dir, headless=False, log=print):
         raise
 
 
+# Một tiến trình chỉ được chạy 1 Playwright (sync). Các phiên (Gemini / ChatGPT / Claude / NotebookLM) dùng chung,
+# mỗi phiên vẫn có cửa sổ Chrome + profile riêng -> mở nhiều AI cùng lúc (soát chéo) được.
+_PW = {"pw": None, "n": 0}
+
+
+def pw_acquire():
+    if _PW["pw"] is None:
+        from playwright.sync_api import sync_playwright
+        _PW["pw"] = sync_playwright().start()
+        _PW["n"] = 0
+    _PW["n"] += 1
+    return _PW["pw"]
+
+
+def pw_release(pw):
+    if pw is None or pw is not _PW["pw"]:
+        return
+    _PW["n"] -= 1
+    if _PW["n"] <= 0:
+        try:
+            pw.stop()
+        except Exception:
+            pass
+        _PW["pw"], _PW["n"] = None, 0
+
+
 ACCOUNT_FILE = os.path.join(BASE_DIR, "gemini_account.json")
 
 _JS_ACCOUNT = r"""
@@ -325,11 +351,10 @@ class GeminiSession:
 
     # --- vòng đời -----------------------------------------------------------
     def start(self):
-        from playwright.sync_api import sync_playwright
         user_data_dir = os.path.join(BASE_DIR, "profiles", self.profile_name)
         os.makedirs(user_data_dir, exist_ok=True)
         self.log(f"Đang mở trình duyệt với tài khoản: {self.profile_name}")
-        self._pw = sync_playwright().start()
+        self._pw = pw_acquire()
         try:
             self.ctx = launch_browser(self._pw, user_data_dir, headless=self.headless, log=self.log)
         except Exception as e:
@@ -378,8 +403,7 @@ class GeminiSession:
         except Exception:
             pass
         try:
-            if self._pw:
-                self._pw.stop()
+            pw_release(self._pw)
         except Exception:
             pass
         self.ctx = self._pw = self.page = None

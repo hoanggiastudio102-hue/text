@@ -176,7 +176,7 @@ class WebChatSession:
         d = os.path.join(BASE_DIR, "profiles", self.profile_name)
         os.makedirs(d, exist_ok=True)
         self.log(f"Đang mở Chrome {self.name} ({self.profile_name})…")
-        self._pw = sync_playwright().start()
+        self._pw = gc.pw_acquire()
         try:
             self.ctx = launch_browser(self._pw, d, headless=self.headless, log=self.log)
         except Exception as e:
@@ -188,7 +188,7 @@ class WebChatSession:
         self.record_account()
 
     def close(self):
-        for fn in (lambda: self.ctx and self.ctx.close(), lambda: self._pw and self._pw.stop()):
+        for fn in (lambda: self.ctx and self.ctx.close(), lambda: gc.pw_release(self._pw)):
             try:
                 fn()
             except Exception:
@@ -496,7 +496,7 @@ if __name__ == "__main__":
             from playwright.sync_api import sync_playwright
             d = os.path.join(BASE_DIR, "profiles", s.profile_name)
             os.makedirs(d, exist_ok=True)
-            s._pw = sync_playwright().start()
+            s._pw = gc.pw_acquire()
             s.ctx = launch_browser(s._pw, d, headless=False, log=print)
             s.page = s.ctx.pages[0] if s.ctx.pages else s.ctx.new_page()
             try:
