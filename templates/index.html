@@ -869,6 +869,20 @@
                 </div>
             </div>
         </div>
+        <div id="flIpModal" class="lz-modal" style="display: none;">
+            <div class="lz-modal-box" style="max-width:640px;">
+                <div class="lz-modal-head"><b id="flIpModalTitle">IP của tài khoản</b><button type="button" id="flIpModalClose" class="btn-primary">Đóng</button></div>
+                <div class="lz-muted" style="margin-bottom:6px;">Các IP máy này đã dùng (mới nhất trên cùng):</div>
+                <div class="fl-tablewrap" style="max-height:220px;overflow:auto;"><table class="fl-table"><thead><tr><th>IP</th><th>Lần đầu</th><th>Lần cuối</th><th></th></tr></thead>
+                <tbody id="flIpHist"></tbody></table></div>
+                <label class="fl-check" style="margin:12px 0 8px;display:flex;gap:8px;align-items:center;justify-content:flex-start;"><input type="checkbox" id="flIpLock" style="width:auto;margin:0;"> <span><b>Khoá IP:</b> chỉ cho đăng nhập / gửi sản phẩm từ các IP dưới đây</span></label>
+                <div class="form-group"><label>IP được phép <small class="lz-muted">(mỗi dòng 1 IP, hoặc dải VD 113.161.12.0/24)</small></label>
+                    <textarea id="flIpAllowed" class="glass-input" rows="4" placeholder="VD: 113.161.12.34"></textarea></div>
+                <div class="lz-error" id="flIpErr" style="display:none;"></div>
+                <div class="fl-inline"><button type="button" class="btn-primary" id="flIpAddCur"><i class="fa-solid fa-plus"></i> Thêm IP hiện tại của máy</button>
+                    <button type="button" class="btn-glow" id="flIpSave"><i class="fa-solid fa-floppy-disk"></i> Lưu</button></div>
+            </div>
+        </div>
         <div id="lzStyleModal" class="lz-modal" style="display: none;">
             <div class="lz-modal-box">
                 <div class="lz-modal-head"><b id="lzStyleModalTitle">Phong cách sáng tạo</b><button type="button" id="lzStyleModalClose" class="btn-primary">Đóng</button></div>
@@ -953,10 +967,26 @@
                             </div>
                         </div>
                         <div class="fl-tablewrap">
-                            <table class="fl-table"><thead><tr><th>Tên đăng nhập</th><th>Tên hiển thị</th><th>Tài khoản Google trên máy</th><th>Vai trò</th><th>Trạng thái</th><th>Ngày cấp</th><th>Thao tác</th></tr></thead>
-                            <tbody id="flAccounts"><tr><td colspan="7" class="lz-muted">Chưa có tài khoản nào. Bấm "Cấp tài khoản".</td></tr></tbody></table>
+                            <table class="fl-table"><thead><tr><th>Tên đăng nhập</th><th>Tên hiển thị</th><th>Tài khoản Google trên máy</th><th>IP</th><th>Vai trò</th><th>Trạng thái</th><th>Ngày cấp</th><th>Thao tác</th></tr></thead>
+                            <tbody id="flAccounts"><tr><td colspan="8" class="lz-muted">Chưa có tài khoản nào. Bấm "Cấp tài khoản".</td></tr></tbody></table>
                         </div>
                         <div class="lz-muted" style="margin-top:8px;">Nhân viên nghỉ việc: bấm <b>Khoá</b> (giữ lịch sử, mở lại được) thay vì Xoá. Quên mật khẩu: bấm <b>Đổi mật khẩu</b> (tự gõ hoặc để trống cho Tool tạo ngẫu nhiên).</div>
+                        <div id="flIpBox" class="fl-ipbox">
+                            <h3><i class="fa-solid fa-network-wired"></i> Quản lý IP <span class="lz-muted" id="flMyIp"></span></h3>
+                            <div class="fl-inline" style="margin-bottom:10px;">
+                                <input type="text" id="flIpNew" class="glass-input" placeholder="IP hoặc dải IP cần chặn, VD: 1.2.3.4 hoặc 1.2.3.0/24">
+                                <input type="text" id="flIpNote" class="glass-input" placeholder="Ghi chú (tuỳ chọn)">
+                                <button type="button" class="btn-primary fl-danger" id="flIpBlock"><i class="fa-solid fa-ban"></i> Chặn IP</button>
+                            </div>
+                            <div class="fl-ipcols">
+                                <div><b>IP đang bị chặn</b><div id="flIpBlocked" class="fl-iplist"></div>
+                                    <b style="display:block;margin-top:10px;">Tạm khoá do sai mật khẩu nhiều lần</b><div id="flIpThrottled" class="fl-iplist"></div></div>
+                                <div><b>Nhật ký IP gần đây</b>
+                                    <div class="fl-tablewrap" style="max-height:260px;overflow:auto;"><table class="fl-table"><thead><tr><th>Thời gian</th><th>IP</th><th>Tài khoản</th><th>Sự kiện</th><th></th></tr></thead>
+                                    <tbody id="flIpEvents"></tbody></table></div></div>
+                            </div>
+                            <div class="lz-muted" style="margin-top:6px;">IP lấy từ Cloudflare (IP mạng thật của máy nhân viên). Nhiều máy cùng văn phòng thường chung 1 IP; mạng gia đình/4G có thể đổi IP sau khi khởi động lại modem.</div>
+                        </div>
                         <div id="flHubDenied" class="lz-muted" style="display:none;">Phần quản trị chỉ hiện khi mở trên máy chủ (localhost:5002) hoặc sau khi đăng nhập Cloudflare Access. Thử tải lại trang.</div>
                     </section>
 

@@ -1348,7 +1348,12 @@ def fleet_heartbeat():
     dev = fleet.auth_device(_bearer())
     if not dev:
         return jsonify({"status": "error", "message": "Token không hợp lệ."}), 401
-    fleet.heartbeat(dev["id"], request.get_json(silent=True) or {})
+    ip = fleet.client_ip(request)
+    why = fleet.device_ip_check(dev, ip)
+    if why:
+        fleet.log_ip_event(ip, dev.get("account") or dev.get("name"), "denied", "Máy bị chặn gửi: " + why)
+        return jsonify({"status": "error", "message": why}), 403
+    fleet.heartbeat(dev["id"], request.get_json(silent=True) or {}, ip)
     return jsonify({"status": "success"})
 
 
@@ -1357,6 +1362,9 @@ def fleet_report():
     dev = fleet.auth_device(_bearer())
     if not dev:
         return jsonify({"status": "error", "message": "Token không hợp lệ."}), 401
+    why = fleet.device_ip_check(dev, fleet.client_ip(request))
+    if why:
+        return jsonify({"status": "error", "message": why}), 403
     try:
         meta = json.loads(request.form.get("meta", "{}"))
     except ValueError:
@@ -1442,7 +1450,7 @@ def fleet_agent_pair():
 @app.route("/api/fleet/login", methods=["POST"])
 def fleet_login():
     data = request.get_json(silent=True) or {}
-    ip = request.headers.get("Cf-Connecting-Ip") or request.remote_addr or ""
+    ip = fleet.client_ip(request)
     try:
         dev_id, token, name = fleet.login_account(data.get("username"), data.get("password"),
                                                   data.get("hostname", ""), ip)
@@ -1478,12 +1486,36 @@ def fleet_account_one(username):
     d = request.get_json(silent=True) or {}
     try:
         res = fleet.update_account(username, d.get("display_name"),
-                                   (d.get("password") or "") if d.get("reset_password") else None, d.get("locked"))
+                                   (d.get("password") or "") if d.get("reset_password") else None, d.get("locked"),
+                                   d.get("allowed_ips"), d.get("ip_lock"), bool(d.get("clear_ip_alert")))
     except ValueError as e:
         return jsonify({"status": "error", "message": str(e)}), 400
     if not res:
         return jsonify({"status": "error", "message": "Không có tài khoản này."}), 404
     return jsonify({"status": "success", "account": res[0], "password": res[1]})
+
+
+@app.route("/api/fleet-admin/ip", methods=["GET", "POST"])
+def fleet_ip():
+    """Quản lý IP: GET = danh sách chặn + IP đang tạm khoá + nhật ký; POST {action: block|unblock, ip, note}."""
+    deny = _admin_only()
+    if deny:
+        return deny
+    if request.method == "POST":
+        d = request.get_json(silent=True) or {}
+        try:
+            if d.get("action") == "unblock":
+                fleet.unblock_ip(d.get("ip"))
+            else:
+                ip = fleet.block_ip(d.get("ip"), d.get("note", ""))
+                if fleet.ip_match(fleet.client_ip(request), [ip]):
+                    fleet.unblock_ip(ip)
+                    raise ValueError("Đây là IP sếp đang dùng — không chặn để tránh tự khoá mình.")
+        except ValueError as e:
+            return jsonify({"status": "error", "message": str(e)}), 400
+    r = fleet.ip_rules()
+    return jsonify({"status": "success", "blocked": r["blocked"], "events": r["events"][-150:][::-1],
+                    "throttled": fleet.throttled_ips(), "my_ip": fleet.client_ip(request)})
 
 
 @app.route("/api/fleet/agent/login", methods=["POST"])

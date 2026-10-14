@@ -43,6 +43,7 @@
         $('flHubDenied').style.display = hub ? 'none' : '';
         $('flHubBox').querySelectorAll('.fl-acc-head,.fl-acc-tools,.fl-tablewrap,.lz-muted:not(#flHubDenied)').forEach(el => el.style.display = hub ? '' : 'none');
         $('flHubData').style.display = hub ? '' : 'none';
+        $('flIpBox').style.display = hub ? '' : 'none';
         if (!hub) return;
         const sm = j.summary, t = sm.total;
         $('kJobs').textContent = num(t.jobs);
@@ -71,6 +72,7 @@
         $('flDaily').innerHTML = sm.daily.map(x => `<div class="fl-drow"><span>${x.day}</span>
             <div class="fl-bar"><i style="width:${Math.round(x.units / max * 100)}%"></i></div><b>${x.units} bản</b></div>`).join('');
         loadAccounts().catch(() => { });
+        loadIp().catch(() => { });
         const rp = j.reports || [];
         $('flReports').innerHTML = rp.length ? rp.map(r => {
             const full = r.units_total && r.units_done === r.units_total;
@@ -106,14 +108,105 @@
             return `<tr><td><b>${esc(a.username)}</b></td>
                 <td>${esc(a.display_name)} <button class="fl-link" data-act="rename" data-u="${esc(a.username)}" title="Đổi tên hiển thị"><i class="fa-solid fa-pen"></i></button></td>
                 <td>${a.state && a.state.google ? esc(a.state.google) : (a.last_login ? '<span class="lz-muted">chưa báo</span>' : '—')}</td>
+                <td>${ipCell(a)}</td>
                 <td>${role}</td>
                 <td>${st}<div class="lz-muted">${conn}${gem}</div></td>
                 <td>${day}</td>
                 <td class="fl-acts"><button class="btn-primary fl-mini" data-act="${a.locked ? 'unlock' : 'lock'}" data-u="${esc(a.username)}"><i class="fa-solid fa-lock${a.locked ? '-open' : ''}"></i> ${a.locked ? 'Mở khoá' : 'Khoá'}</button>
+                <button class="btn-primary fl-mini" data-act="ip" data-u="${esc(a.username)}" title="Lịch sử IP, khoá IP"><i class="fa-solid fa-network-wired"></i> IP</button>
                 <button class="btn-primary fl-mini" data-act="pass" data-u="${esc(a.username)}"><i class="fa-solid fa-key"></i> Đổi mật khẩu</button>
                 <button class="btn-primary fl-danger fl-mini" data-act="del" data-u="${esc(a.username)}" title="Xoá tài khoản"><i class="fa-solid fa-trash"></i></button></td></tr>`;
-        }).join('') : '<tr><td colspan="7" class="lz-muted">Không có tài khoản nào khớp.</td></tr>';
+        }).join('') : '<tr><td colspan="8" class="lz-muted">Không có tài khoản nào khớp.</td></tr>';
     }
+    function ipCell(a) {
+        if (!a.ip) return '<span class="lz-muted">—</span>';
+        const n = (a.ip_history || []).length;
+        const lock = a.ip_lock ? ' <i class="fa-solid fa-shield-halved" style="color:#6ee7b7" title="Đã khoá IP: chỉ cho dùng từ IP được phép"></i>' : '';
+        const alert = a.ip_alert ? ` <button class="fl-pill warn fl-ipwarn" data-act="ipseen" data-u="${esc(a.username)}" title="Xuất hiện IP mới ${esc(a.ip_alert.ip)} lúc ${fmtT(a.ip_alert.at)} (trước đó ${esc(a.ip_alert.prev || '—')}). Bấm = đã xem">⚠ IP mới</button>` : '';
+        return `<span class="fl-ip">${esc(a.ip)}</span>${lock}${alert}<div class="lz-muted">${n > 1 ? n + ' IP đã dùng · ' : ''}${a.last_ip_at ? ago(a.last_ip_at) : ''}</div>`;
+    }
+
+    // ---------- quản lý IP ----------
+    const EV = { fail: ['Sai mật khẩu', 'warn'], denied: ['Bị chặn', 'off'], new_ip: ['IP mới', 'run'] };
+    let myIp = '';
+    async function loadIp() {
+        const { ok, j } = await jfetch('/api/fleet-admin/ip');
+        if (!ok || j.status !== 'success') return;
+        myIp = j.my_ip || '';
+        $('flMyIp').textContent = myIp ? '— IP sếp đang dùng: ' + myIp : '';
+        $('flIpBlocked').innerHTML = (j.blocked || []).length ? j.blocked.map(b => `<div class="fl-iprow"><span><span class="fl-ip">${esc(b.ip)}</span>
+            <span class="lz-muted">${esc(b.note || '')} · ${fmtT(b.at)}</span></span>
+            <button class="btn-primary fl-mini" data-ipact="unblock" data-ip="${esc(b.ip)}">Bỏ chặn</button></div>`).join('')
+            : '<span class="lz-muted">Chưa chặn IP nào.</span>';
+        $('flIpThrottled').innerHTML = (j.throttled || []).length ? j.throttled.map(t => `<div class="fl-iprow"><span><span class="fl-ip">${esc(t.ip)}</span>
+            <span class="lz-muted">${t.fails} lần sai${t.locked ? ' · khoá đến ' + new Date(t.until * 1000).toLocaleTimeString('vi-VN') : ''}</span></span>
+            <span><button class="btn-primary fl-mini" data-ipact="unblock" data-ip="${esc(t.ip)}">Gỡ</button>
+            <button class="btn-primary fl-danger fl-mini" data-ipact="block" data-ip="${esc(t.ip)}">Chặn hẳn</button></span></div>`).join('')
+            : '<span class="lz-muted">Không có.</span>';
+        const blocked = new Set((j.blocked || []).map(b => b.ip));
+        $('flIpEvents').innerHTML = (j.events || []).length ? j.events.map(e => {
+            const k = EV[e.kind] || [e.kind, ''];
+            return `<tr><td style="white-space:nowrap">${fmtT(e.at)}</td><td><span class="fl-ip">${esc(e.ip || '—')}</span></td><td>${esc(e.user || '')}</td>
+                <td><span class="fl-pill ${k[1]}">${k[0]}</span> <span class="lz-muted">${esc(e.msg || '')}</span></td>
+                <td>${e.ip && !blocked.has(e.ip) && e.ip !== myIp ? `<button class="btn-primary fl-danger fl-mini" data-ipact="block" data-ip="${esc(e.ip)}">Chặn</button>` : ''}</td></tr>`;
+        }).join('') : '<tr><td colspan="5" class="lz-muted">Chưa có sự kiện nào.</td></tr>';
+    }
+    async function ipAction(action, ip, note) {
+        const { j } = await jfetch('/api/fleet-admin/ip', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action, ip, note: note || '' }) });
+        if (j.status !== 'success') { toast(j.message || 'Lỗi', true); return false; }
+        toast(action === 'block' ? 'Đã chặn ' + ip : 'Đã bỏ chặn ' + ip); loadIp().catch(() => { }); return true;
+    }
+    let ipUser = null;
+    function openIpModal(a) {
+        ipUser = a.username;
+        $('flIpModalTitle').textContent = 'IP — ' + a.display_name + ' (' + a.username + ')';
+        $('flIpErr').style.display = 'none';
+        $('flIpLock').checked = !!a.ip_lock;
+        $('flIpAllowed').value = (a.allowed_ips || []).join('\n');
+        const hist = a.ip_history || [];
+        $('flIpHist').innerHTML = hist.length ? hist.map(h => `<tr><td><span class="fl-ip">${esc(h.ip)}</span>${h.ip === a.ip ? ' <span class="fl-pill on">hiện tại</span>' : ''}</td>
+            <td>${fmtT(h.first)}</td><td>${fmtT(h.last)}</td>
+            <td class="fl-acts"><button class="btn-primary fl-mini" data-hact="allow" data-ip="${esc(h.ip)}">Cho phép</button>
+            <button class="btn-primary fl-danger fl-mini" data-hact="block" data-ip="${esc(h.ip)}">Chặn</button></td></tr>`).join('')
+            : '<tr><td colspan="4" class="lz-muted">Máy chưa kết nối lần nào.</td></tr>';
+        $('flIpModal').style.display = 'flex';
+    }
+    function addAllowed(ip) {
+        if (!ip) return;
+        const cur = $('flIpAllowed').value.split(/[\s,;]+/).filter(Boolean);
+        if (!cur.includes(ip)) cur.push(ip);
+        $('flIpAllowed').value = cur.join('\n');
+    }
+    function initIp() {
+        $('flIpBlock').addEventListener('click', async () => {
+            const ip = $('flIpNew').value.trim(); if (!ip) return toast('Nhập IP cần chặn', true);
+            if (await ipAction('block', ip, $('flIpNote').value.trim())) { $('flIpNew').value = ''; $('flIpNote').value = ''; }
+        });
+        $('flIpBox').addEventListener('click', async (e) => {
+            const b = e.target.closest('[data-ipact]'); if (!b) return;
+            const ip = b.dataset.ip;
+            if (b.dataset.ipact === 'block' && !confirm('Chặn IP ' + ip + '? Mọi máy dùng IP này sẽ không đăng nhập / gửi sản phẩm được (máy cùng văn phòng thường chung IP).')) return;
+            await ipAction(b.dataset.ipact, ip);
+        });
+        $('flIpModalClose').addEventListener('click', () => { $('flIpModal').style.display = 'none'; });
+        $('flIpAddCur').addEventListener('click', () => { const a = accounts.find(x => x.username === ipUser); addAllowed(a && a.ip); });
+        $('flIpHist').addEventListener('click', async (e) => {
+            const b = e.target.closest('[data-hact]'); if (!b) return;
+            if (b.dataset.hact === 'allow') addAllowed(b.dataset.ip);
+            else if (confirm('Chặn IP ' + b.dataset.ip + ' cho TẤT CẢ tài khoản?')) await ipAction('block', b.dataset.ip, 'chặn từ ' + ipUser);
+        });
+        $('flIpSave').addEventListener('click', async () => {
+            const lock = $('flIpLock').checked, list = $('flIpAllowed').value;
+            const a = accounts.find(x => x.username === ipUser);
+            if (lock && a && a.ip && !list.includes(a.ip) && !confirm('IP hiện tại của máy (' + a.ip + ') KHÔNG có trong danh sách → máy sẽ bị ngắt ngay. Vẫn lưu?')) return;
+            const { j } = await jfetch('/api/fleet-admin/accounts/' + encodeURIComponent(ipUser), { method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ allowed_ips: list, ip_lock: lock }) });
+            if (j.status !== 'success') { $('flIpErr').textContent = j.message || 'Lỗi'; $('flIpErr').style.display = ''; return; }
+            $('flIpModal').style.display = 'none'; toast(lock ? 'Đã khoá IP cho tài khoản này' : 'Đã lưu (không khoá IP)'); loadAccounts();
+        });
+    }
+
     function showCred(title, acc, pw) {
         $('flAccModalTitle').textContent = title;
         $('flAccForm').style.display = 'none'; $('flAccDone').style.display = '';
@@ -155,6 +248,8 @@
             const u = b.dataset.u, a = accounts.find(x => x.username === u); if (!a) return;
             const patch = async (body) => (await jfetch('/api/fleet-admin/accounts/' + encodeURIComponent(u), { method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).j;
+            if (b.dataset.act === 'ip') { openIpModal(a); return; }
+            if (b.dataset.act === 'ipseen') { await patch({ clear_ip_alert: true }); loadAccounts(); return; }
             if (b.dataset.act === 'pass') {
                 const np = prompt('Mật khẩu mới cho ' + a.display_name + ' (tối thiểu 6 ký tự).\nĐể trống = Tool tạo ngẫu nhiên. Máy đang dùng vẫn chạy, mật khẩu mới dùng cho lần đăng nhập sau.', '');
                 if (np === null) return;
@@ -178,6 +273,7 @@
     function init() {
         if (!$('tab-fleet')) return;
         initAccounts();
+        initIp();
         document.querySelector('[data-tab="tab-fleet"]').addEventListener('click', () => {
             refresh(); clearInterval(timer); timer = setInterval(() => {
                 if ($('tab-fleet').classList.contains('active')) refresh(); else { clearInterval(timer); }

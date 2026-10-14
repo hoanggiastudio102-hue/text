@@ -8,6 +8,7 @@ Cấu hình máy NV : fleet_agent.json  (hub_url, device_id, token, name, cf_id,
 """
 import hashlib
 import hmac
+import ipaddress
 import json
 import os
 import secrets
@@ -24,6 +25,7 @@ PAIRING_FILE = os.path.join(DATA_DIR, "pairing.json")
 ACCOUNTS_FILE = os.path.join(DATA_DIR, "accounts.json")
 AGENT_FILE = os.path.join(APP_DIR, "fleet_agent.json")
 OUTBOX_FILE = os.path.join(APP_DIR, "fleet_outbox.json")   # job đã gửi / chờ gửi (máy NV)
+IPRULES_FILE = os.path.join(DATA_DIR, "ip_rules.json")    # IP bị chặn + nhật ký IP (máy chủ)
 
 PAIR_TTL = 15 * 60          # mã ghép máy sống 15 phút, dùng 1 lần
 ONLINE_SECONDS = 90         # quá ngần này giây không heartbeat -> ngoại tuyến
@@ -127,6 +129,9 @@ def _public(a, devices=None, stats=None):
         "username": a["username"], "display_name": a.get("display_name") or a["username"],
         "role": a.get("role", "staff"), "locked": bool(a.get("locked")),
         "created": a.get("created", 0), "last_login": a.get("last_login", 0), "last_ip": a.get("last_ip", ""),
+        "last_ip_at": a.get("last_ip_at", 0), "ip": d.get("ip") or a.get("last_ip", ""),
+        "ip_history": sorted(a.get("ip_history", []), key=lambda x: -x.get("last", 0)),
+        "ip_lock": bool(a.get("ip_lock")), "allowed_ips": a.get("allowed_ips", []), "ip_alert": a.get("ip_alert"),
         "device_id": a.get("device_id", ""), "online": online, "last_seen": d.get("last_seen", 0),
         "state": d.get("state", {}), "hostname": d.get("hostname", ""),
         "stats": (stats or {}).get(a.get("device_id") or "", {"jobs": 0, "units": 0, "chars": 0, "last": 0}),
@@ -162,7 +167,8 @@ def create_account(username, display_name="", password="", role="staff"):
     return _public(accs[u]), password
 
 
-def update_account(username, display_name=None, password=None, locked=None):
+def update_account(username, display_name=None, password=None, locked=None,
+                   allowed_ips=None, ip_lock=None, clear_ip_alert=False):
     u = (username or "").strip().lower()
     new_pw = None
     with _LOCK:
@@ -179,6 +185,14 @@ def update_account(username, display_name=None, password=None, locked=None):
             a["salt"], a["pw_hash"] = _pw_hash(new_pw)
         if locked is not None:
             a["locked"] = bool(locked)
+        if allowed_ips is not None:
+            a["allowed_ips"] = parse_ip_list(allowed_ips)
+        if ip_lock is not None:
+            if ip_lock and not a.get("allowed_ips"):
+                raise ValueError("Bật khoá IP thì phải có ít nhất 1 IP được phép.")
+            a["ip_lock"] = bool(ip_lock)
+        if clear_ip_alert:
+            a.pop("ip_alert", None)
         _write(ACCOUNTS_FILE, accs)
         devices = _read(DEVICES_FILE, {})
         d = devices.get(a.get("device_id") or "")
@@ -222,6 +236,9 @@ def login_account(username, password, hostname="", ip=""):
     keys = [("u:" + u, MAX_FAILS_USER), ("i:" + ip, MAX_FAILS_IP)]
     if _throttled(keys):
         raise PermissionError("Sai quá nhiều lần. Thử lại sau 10 phút.")
+    if ip_is_blocked(ip):
+        log_ip_event(ip, u, "denied", "IP nằm trong danh sách chặn")
+        raise PermissionError("Địa chỉ IP này đã bị chặn. Liên hệ sếp.")
     password = password or ""
     with _LOCK:
         accs = _read(ACCOUNTS_FILE, {})
@@ -235,9 +252,14 @@ def login_account(username, password, hostname="", ip=""):
             now = time.time()
             for k, _ in keys:
                 _FAILS.setdefault(k, []).append(now)
+            log_ip_event(ip, u, "fail", "Sai mật khẩu" if a else "Tài khoản không tồn tại")
             raise PermissionError("Sai tài khoản hoặc mật khẩu.")
         if a.get("locked"):
             raise PermissionError("Tài khoản đã bị khoá. Liên hệ sếp.")
+        why = ip_denied(a, ip)
+        if why:
+            log_ip_event(ip, u, "denied", "Đăng nhập bị chặn: " + why)
+            raise PermissionError(why)
         devices = _read(DEVICES_FILE, {})
         token = secrets.token_urlsafe(32)
         dev_id = a.get("device_id")
@@ -251,12 +273,147 @@ def login_account(username, password, hostname="", ip=""):
                                "revoked": False, "state": {}, "account": u}
             a["device_id"] = dev_id
         a["last_login"] = time.time()
-        a["last_ip"] = ip
+        _note_ip(a, ip, force=True)
+        devices[dev_id]["ip"] = ip
         for k, _ in keys:
             _FAILS.pop(k, None)
         _write(DEVICES_FILE, devices)
         _write(ACCOUNTS_FILE, accs)
     return dev_id, token, a["display_name"]
+
+
+# ---------------------------------------------------------------- QUẢN LÝ IP (máy chủ)
+# - Mỗi tài khoản: lịch sử IP (lần đầu / lần cuối thấy), cảnh báo khi xuất hiện IP mới.
+# - Khoá IP theo tài khoản: chỉ cho đăng nhập / gửi báo cáo từ các IP hoặc dải IP (CIDR) sếp cho phép.
+# - Danh sách chặn chung: IP bị chặn không đăng nhập, không gửi được gì.
+IP_HIST_MAX, IP_EVENTS_MAX, IP_TOUCH_SECONDS = 30, 300, 10 * 60
+
+
+def parse_ip_list(v):
+    """Nhận list hoặc chuỗi (mỗi dòng / dấu phẩy 1 mục) -> list IP/CIDR chuẩn hoá. Sai định dạng -> ValueError."""
+    items = v if isinstance(v, list) else _re.split(r"[\s,;]+", str(v or ""))
+    out = []
+    for raw in items:
+        x = str(raw).strip()
+        if not x:
+            continue
+        try:
+            x = str(ipaddress.ip_network(x, strict=False)) if "/" in x else str(ipaddress.ip_address(x))
+        except ValueError:
+            raise ValueError(f"IP không hợp lệ: {x}  (VD đúng: 113.161.12.34 hoặc 113.161.12.0/24)")
+        if x not in out:
+            out.append(x)
+    return out[:100]
+
+
+def ip_match(ip, rules):
+    try:
+        addr = ipaddress.ip_address(str(ip).strip())
+    except ValueError:
+        return False
+    for r in rules or []:
+        try:
+            if ("/" in r and addr in ipaddress.ip_network(r, strict=False)) or addr == ipaddress.ip_address(r):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def ip_rules():
+    r = _read(IPRULES_FILE, {})
+    r.setdefault("blocked", [])
+    r.setdefault("events", [])
+    return r
+
+
+def ip_is_blocked(ip):
+    return bool(ip) and ip_match(ip, [b["ip"] for b in ip_rules()["blocked"]])
+
+
+def ip_denied(acc, ip):
+    """Tài khoản bật khoá IP mà IP hiện tại không nằm trong danh sách -> trả lý do."""
+    if acc and acc.get("ip_lock") and acc.get("allowed_ips") and not ip_match(ip, acc["allowed_ips"]):
+        return f"Tài khoản này chỉ được dùng từ IP sếp đã cho phép (IP hiện tại: {ip or 'không rõ'})."
+    return ""
+
+
+def log_ip_event(ip, username, kind, msg):
+    with _LOCK:
+        r = ip_rules()
+        r["events"].append({"at": time.time(), "ip": str(ip or "")[:64], "user": str(username or "")[:64],
+                            "kind": kind, "msg": str(msg)[:200]})
+        r["events"] = r["events"][-IP_EVENTS_MAX:]
+        _write(IPRULES_FILE, r)
+
+
+def _note_ip(a, ip, force=False):
+    """Ghi IP vào lịch sử tài khoản. Trả True nếu có thay đổi cần lưu."""
+    if not ip:
+        return False
+    now = time.time()
+    hist = a.setdefault("ip_history", [])
+    row = next((h for h in hist if h.get("ip") == ip), None)
+    if row is None:
+        if (hist or a.get("last_ip")) and a.get("last_ip") != ip:   # đã từng thấy IP khác -> cảnh báo IP mới
+            a["ip_alert"] = {"ip": ip, "at": now, "prev": a.get("last_ip", "")}
+            log_ip_event(ip, a.get("username"), "new_ip", f"IP mới (trước đó: {a.get('last_ip') or '—'})")
+        hist.append({"ip": ip, "first": now, "last": now})
+        hist.sort(key=lambda x: -x.get("last", 0))
+        del hist[IP_HIST_MAX:]
+    elif not force and a.get("last_ip") == ip and now - a.get("last_ip_at", 0) < IP_TOUCH_SECONDS:
+        return False                          # cùng IP, vừa ghi -> khỏi ghi đĩa liên tục
+    else:
+        row["last"] = now
+    a["last_ip"], a["last_ip_at"] = ip, now
+    return True
+
+
+def block_ip(ip, note=""):
+    ip = parse_ip_list(ip)
+    if len(ip) != 1:
+        raise ValueError("Nhập đúng 1 IP hoặc 1 dải IP.")
+    with _LOCK:
+        r = ip_rules()
+        if not any(b["ip"] == ip[0] for b in r["blocked"]):
+            r["blocked"].append({"ip": ip[0], "note": str(note or "")[:120], "at": time.time()})
+            _write(IPRULES_FILE, r)
+    return ip[0]
+
+
+def unblock_ip(ip):
+    ip = str(ip or "").strip()
+    with _LOCK:
+        r = ip_rules()
+        n = len(r["blocked"])
+        r["blocked"] = [b for b in r["blocked"] if b["ip"] != ip]
+        _write(IPRULES_FILE, r)
+    _FAILS.pop("i:" + ip, None)               # gỡ luôn tạm khoá do sai mật khẩu
+    return len(r["blocked"]) != n
+
+
+def throttled_ips():
+    now = time.time()
+    out = []
+    for k, arr in list(_FAILS.items()):
+        if not k.startswith("i:"):
+            continue
+        arr = [t for t in arr if now - t < FAIL_WINDOW]
+        if arr:
+            out.append({"ip": k[2:], "fails": len(arr), "locked": len(arr) >= MAX_FAILS_IP,
+                        "until": max(arr) + FAIL_WINDOW})
+    return sorted(out, key=lambda x: -x["fails"])
+
+
+def client_ip(request):
+    """IP thật của người gọi. Qua Cloudflare Tunnel (cloudflared chạy ngay trên máy chủ) thì lấy CF-Connecting-IP;
+    chỉ tin header đó khi yêu cầu đi vào từ chính máy (loopback), tránh bị tự khai IP giả."""
+    ra = request.remote_addr or ""
+    if ra in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
+        cf = (request.headers.get("Cf-Connecting-Ip") or "").strip()
+        if cf:
+            return cf[:64]
+    return ra[:64]
 
 
 def auth_device(token):
@@ -270,15 +427,32 @@ def auth_device(token):
     return None
 
 
-def heartbeat(dev_id, state):
+def device_ip_check(dev, ip):
+    """Máy gửi heartbeat/sản phẩm từ IP này có được phép không. Trả '' nếu được, ngược lại là lý do."""
+    if ip_is_blocked(ip):
+        return "Địa chỉ IP này đã bị chặn. Liên hệ sếp."
+    a = _read(ACCOUNTS_FILE, {}).get(dev.get("account") or "")
+    return ip_denied(a, ip) if a else ""
+
+
+def heartbeat(dev_id, state, ip=""):
+    ip = str(ip or "")[:64]
     with _LOCK:
         devices = _read(DEVICES_FILE, {})
         d = devices.get(dev_id)
         if not d or d.get("revoked"):
             return False
         d["last_seen"] = time.time()
-        d["state"] = {k: state.get(k) for k in ("gemini_logged_in", "model", "job", "version", "os") if k in state}
+        d["state"] = {k: state.get(k) for k in ("gemini_logged_in", "model", "job", "version", "os", "google")
+                      if k in state}
+        if ip:
+            d["ip"] = ip
         _write(DEVICES_FILE, devices)
+        if ip and d.get("account"):
+            accs = _read(ACCOUNTS_FILE, {})
+            a = accs.get(d["account"])
+            if a and _note_ip(a, ip):
+                _write(ACCOUNTS_FILE, accs)
     return True
 
 
@@ -631,6 +805,12 @@ def agent_ping(state):
     r = requests.post(_url(cfg, "/api/fleet/heartbeat"), json=state, headers=_headers(cfg), timeout=15)
     if r.status_code == 401:
         raise PermissionError("Máy chủ đã thu hồi hoặc từ chối máy này.")
+    if r.status_code == 403:
+        try:
+            msg = r.json().get("message")
+        except ValueError:
+            msg = ""
+        raise PermissionError(msg or "Máy chủ từ chối (HTTP 403).")
     return r.status_code == 200
 
 

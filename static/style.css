@@ -722,3 +722,13 @@ select.glass-input option {
 .gm-account .gm-warn { color: #fcd34d; }
 
 .tab-btn[hidden]{display:none !important}
+
+/* Quản lý IP */
+.fl-ipbox { margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(148,163,184,.15); }
+.fl-ipbox h3 { margin: 0 0 10px; }
+.fl-ipcols { display: grid; grid-template-columns: minmax(220px, 1fr) 2fr; gap: 16px; }
+@media (max-width: 800px) { .fl-ipcols { grid-template-columns: 1fr; } }
+.fl-iplist { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; font-size: 13px; }
+.fl-iprow { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: rgba(100,116,139,.12); }
+.fl-ip { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+.fl-ipwarn { cursor: pointer; border: 0; }
