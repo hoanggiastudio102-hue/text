@@ -10,7 +10,7 @@ from playwright.sync_api import sync_playwright
 
 import json
 
-def run(source_lang="auto", target_lang="en", gdoc_url="", text_file="", profile_name="default", open_only=False, mode="single", batch_dir="", output_dir="", prompt_id="default", chunk_size="auto", detail_level="expand", selected_prompts="[]"):
+def run(source_lang="auto", target_lang="en", gdoc_url="", text_file="", profile_name="default", open_only=False, mode="single", batch_dir="", output_dir="", prompt_id="default", chunk_size="auto", detail_level="expand", selected_prompts="[]", provider="gemini"):
     print("="*50)
     print(f"🚀 TOOL TRANSLATOR - AUTO CHAT GEMINI ({source_lang.upper()} -> {target_lang.upper()}) 🚀")
     print("="*50)
@@ -34,6 +34,40 @@ def run(source_lang="auto", target_lang="en", gdoc_url="", text_file="", profile
 
         page = browser.pages[0] if browser.pages else browser.new_page()
         
+        if open_only and provider in ("chatgpt", "claude"):
+            import web_chat
+            info = web_chat.PROVIDERS[provider]
+            print(f"Đang mở trang đăng nhập {info['name']}...")
+            try:
+                page.goto(info["url"], timeout=60000)
+            except Exception:
+                pass
+            print("Hãy đăng nhập rồi TẮT HẲN cửa sổ để lưu.")
+            js = (web_chat.CHATGPT_JS if provider == "chatgpt" else web_chat.CLAUDE_JS)["account"]
+            last = None
+            while True:          # đọc tài khoản liên tục trong lúc sếp đăng nhập -> tắt cửa sổ là tool biết ngay email
+                try:
+                    if page.is_closed():
+                        break
+                    a = page.evaluate(js)
+                    if a is not None and a != last:
+                        last = a
+                        if a.get("ok"):
+                            web_chat.set_account(profile_name, {"name": a.get("name", ""), "email": a.get("email", ""),
+                                                                "provider": provider})
+                            print(f"Đã đăng nhập: {a.get('name', '')} {a.get('email', '')}")
+                        else:
+                            web_chat.set_account(profile_name, {"logged_in": False, "provider": provider})
+                    page.wait_for_timeout(3000)
+                except Exception:
+                    if page.is_closed() or not browser.pages:
+                        break
+                    try:
+                        page.wait_for_timeout(2000)
+                    except Exception:
+                        break
+            return
+
         if open_only:
             print("Đang mở trang đăng nhập Gemini...")
             page.goto("https://gemini.google.com/app", timeout=60000)
@@ -432,6 +466,7 @@ if __name__ == "__main__":
     parser.add_argument("--chunk-size", type=str, default="auto")
     parser.add_argument("--detail-level", type=str, default="expand")
     parser.add_argument("--selected-prompts", type=str, default="[]")
+    parser.add_argument("--provider", type=str, default="gemini")
     args = parser.parse_args()
     
-    run(source_lang=args.source_lang, target_lang=args.target_lang, gdoc_url=args.url, text_file=args.text_file, profile_name=args.profile, open_only=args.open_only, mode=args.mode, batch_dir=args.batch_dir, output_dir=args.output_dir, prompt_id=args.prompt_id, chunk_size=args.chunk_size, detail_level=args.detail_level, selected_prompts=args.selected_prompts)
+    run(source_lang=args.source_lang, target_lang=args.target_lang, gdoc_url=args.url, text_file=args.text_file, profile_name=args.profile, open_only=args.open_only, mode=args.mode, batch_dir=args.batch_dir, output_dir=args.output_dir, prompt_id=args.prompt_id, chunk_size=args.chunk_size, detail_level=args.detail_level, selected_prompts=args.selected_prompts, provider=args.provider)

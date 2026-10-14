@@ -401,6 +401,7 @@
         fd.append('dryRun', $('lzDry').checked ? '1' : '');
         fd.append('perLine', $('lzPerLine') && $('lzPerLine').checked ? '1' : '');
         fd.append('profileName', profileName());
+        fd.append('ai', $('lzAi') ? $('lzAi').value : 'gemini');
         return fd;
     }
     function validateInput() {

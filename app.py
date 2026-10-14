@@ -163,15 +163,18 @@ def api_gemini_account():
 @app.route("/api/login", methods=["POST"])
 def login_gemini():
     try:
-        data = request.json
-        profile_name = data.get("profileName", "gemini_profile").strip()
-        if not profile_name:
-            profile_name = "gemini_profile"
-            
-        cmd = [sys.executable, "browser_bot.py", "--open-only", "--profile", profile_name]
-        process = subprocess.Popen(cmd)
+        data = request.json or {}
+        provider = web_chat.provider_of(data.get("provider"))
+        if provider == "gemini":
+            profile_name = (data.get("profileName") or "gemini_profile").strip() or "gemini_profile"
+        else:
+            profile_name = web_chat.PROVIDERS[provider]["profile"]
+        cmd = [sys.executable, "browser_bot.py", "--open-only", "--profile", profile_name, "--provider", provider]
+        process = subprocess.Popen(cmd, cwd=APP_DIR)
         process.wait()
-        return jsonify({"status": "success", "message": f"Đã lưu phiên đăng nhập cho tài khoản {profile_name}!"})
+        name = web_chat.PROVIDERS[provider]["name"]
+        return jsonify({"status": "success", "message": f"Đã lưu phiên đăng nhập {name}.",
+                        "account": gemini_client.load_accounts().get(profile_name) or {}})
     except Exception as e:
         return jsonify({"status": "error", "message": f"Lỗi mở trình duyệt: {str(e)}"}), 500
 
@@ -720,6 +723,7 @@ import re as _re
 import zipfile as _zipfile
 import locales
 import gemini_client
+import web_chat
 from localize_bot import read_json as _read_json, write_json_atomic as _write_json
 
 JOBS_DIR = os.path.join(OUTPUT_FOLDER, "jobs")
@@ -926,9 +930,13 @@ def api_settings():
             update["model"] = m[:60]
         if "thinking" in data:
             update["thinking"] = str(data["thinking"]).strip()[:30]
+        for k in ("chatgpt_model", "claude_model"):      # để trống = dùng model đang chọn trên web
+            if k in data:
+                update[k] = str(data[k] or "").strip()[:60]
         gemini_client.save_settings(update)
     return jsonify({"status": "success", "model": gemini_client.get_model_name(),
-                    "thinking": gemini_client.get_thinking_level()})
+                    "thinking": gemini_client.get_thinking_level(),
+                    "chatgpt_model": web_chat.get_model("chatgpt"), "claude_model": web_chat.get_model("claude")})
 
 
 @app.route("/api/gemini/check", methods=["POST"])
@@ -947,6 +955,39 @@ def api_gemini_check():
                         "output": output.strip()[-3000:]})
     except subprocess.TimeoutExpired:
         return jsonify({"status": "error", "message": "Quá thời gian chờ khi kiểm tra Gemini."}), 500
+
+
+@app.route("/api/ai/accounts")
+def api_ai_accounts():
+    """Tài khoản từng loại AI đã đăng nhập trên máy này (Gemini / ChatGPT / Claude) + model đang đặt."""
+    accs = gemini_client.load_accounts()
+    out = []
+    for key, info in web_chat.PROVIDERS.items():
+        prof = info["profile"]
+        d = os.path.join(APP_DIR, "profiles", prof)
+        out.append({"provider": key, "name": info["name"], "profile": prof, "account": accs.get(prof) or {},
+                    "has_profile": os.path.isdir(d) and bool(os.listdir(d)), "model": web_chat.get_model(key),
+                    "presets": web_chat.MODEL_PRESETS.get(key, [])})
+    return jsonify({"status": "success", "providers": out})
+
+
+@app.route("/api/ai/<provider>/<action>", methods=["POST"])
+def api_ai_action(provider, action):
+    """whoami: đọc lại tài khoản; check: mở chat, đọc menu model, hỏi thử 1 câu."""
+    if provider not in ("chatgpt", "claude") or action not in ("whoami", "check"):
+        return jsonify({"status": "error", "message": "Sai yêu cầu."}), 400
+    if _active_job_id():
+        return jsonify({"status": "error", "message": "Đang có một job chạy. Hãy đợi job xong rồi kiểm tra."}), 409
+    try:
+        proc = subprocess.run([sys.executable, os.path.join(APP_DIR, "web_chat.py"), "--provider", provider, "--" + action],
+                              cwd=APP_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                              timeout=300)
+    except subprocess.TimeoutExpired:
+        return jsonify({"status": "error", "message": "Quá thời gian chờ."}), 500
+    prof = web_chat.PROVIDERS[provider]["profile"]
+    return jsonify({"status": "success" if proc.returncode == 0 else "error",
+                    "output": ((proc.stdout or "") + (proc.stderr or "")).strip()[-3000:],
+                    "account": gemini_client.load_accounts().get(prof) or {}})
 
 
 @app.route("/api/notebook/probe", methods=["POST"])
@@ -1045,7 +1086,8 @@ def api_localize_start():
         "keywords": form.get("keywords", ""), "glossary": form.get("glossary", ""),
         "extra": form.get("extra", "").strip(), "review": form.get("review") in ("1", "true", "on"),
         "chunk_size": chunk_size, "profile": (form.get("profileName") or "gemini_profile").strip() or "gemini_profile",
-        "model": gemini_client.get_model_name(), "thinking": gemini_client.get_thinking_level(),
+        "ai": web_chat.provider_of(form.get("ai")), "model": web_chat.get_model(form.get("ai")),
+        "thinking": gemini_client.get_thinking_level() if web_chat.provider_of(form.get("ai")) == "gemini" else "",
         "dry_run": form.get("dryRun") in ("1", "true", "on"),
         "zip": None, "current": None,
     }
@@ -1280,8 +1322,11 @@ def api_yt_run():
         open(os.path.join(job_dir, "sources", fname), "w", encoding="utf-8").close()
         arts.append({"id": f"a{i}", "name": f"youtube_{l['id']}", "file": fname, "chars": 0, "url": l["url"]})
     style = form.get("style") if form.get("style") in ("clean", "article") else "clean"
+    yt_ai = (form.get("engine") or "notebook").strip().lower()
+    yt_ai = yt_ai if yt_ai in ("notebook", "gemini", "chatgpt", "claude") else "notebook"
     job = {
-        "id": job_id, "created_at": time.time(), "state": "queued", "error": "", "engine": "notebook",
+        "id": job_id, "created_at": time.time(), "state": "queued", "error": "",
+        "engine": "notebook" if yt_ai == "notebook" else "ytchat", "ai": "" if yt_ai == "notebook" else yt_ai,
         "nb": {"kind": "youtube", "style": style, "folder": "YouTube", "type": "YouTube → Text",
                "review_level": "fast" if form.get("review") in ("1", "true", "on") else "off",
                "header": form.get("header") in ("1", "true", "on"), "chat_rules": "", "longer": True,
@@ -1294,7 +1339,9 @@ def api_yt_run():
         "audience": "", "length": "same", "keywords": "", "glossary": "", "extra": (form.get("extra") or "").strip(),
         "review": False, "chunk_size": 8000,
         "profile": (form.get("profileName") or "gemini_profile").strip() or "gemini_profile",
-        "model": "NotebookLM", "thinking": "", "dry_run": form.get("dryRun") in ("1", "true", "on"),
+        "model": "NotebookLM" if yt_ai == "notebook" else web_chat.get_model(yt_ai),
+        "thinking": gemini_client.get_thinking_level() if yt_ai == "gemini" else "",
+        "dry_run": form.get("dryRun") in ("1", "true", "on"),
         "zip": None, "current": None,
     }
     _write_json(os.path.join(job_dir, "job.json"), job)
@@ -1573,7 +1620,8 @@ def _agent_loop():
                     google = ""
                 state = {"job": jid, "model": gemini_client.get_model_name(),
                          "gemini_logged_in": os.path.isdir(prof) and bool(os.listdir(prof)),
-                         "google": google, "os": _platform.system(), "version": "2"}
+                         "google": google, "chatgpt": web_chat.account_label("chatgpt"),
+                         "claude": web_chat.account_label("claude"), "os": _platform.system(), "version": "3"}
                 fleet.agent_ping(state)
                 _AGENT_STATE["last_ping"] = time.time()
                 _AGENT_STATE["error"] = ""

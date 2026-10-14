@@ -107,7 +107,7 @@
             const day = a.created ? new Date(a.created * 1000).toLocaleString('vi-VN', { hour12: false }) : '—';
             return `<tr><td><b>${esc(a.username)}</b></td>
                 <td>${esc(a.display_name)} <button class="fl-link" data-act="rename" data-u="${esc(a.username)}" title="Đổi tên hiển thị"><i class="fa-solid fa-pen"></i></button></td>
-                <td>${a.state && a.state.google ? esc(a.state.google) : (a.last_login ? '<span class="lz-muted">chưa báo</span>' : '—')}</td>
+                <td>${aiCell(a)}</td>
                 <td>${ipCell(a)}</td>
                 <td>${role}</td>
                 <td>${st}<div class="lz-muted">${conn}${gem}</div></td>
@@ -117,6 +117,12 @@
                 <button class="btn-primary fl-mini" data-act="pass" data-u="${esc(a.username)}"><i class="fa-solid fa-key"></i> Đổi mật khẩu</button>
                 <button class="btn-primary fl-danger fl-mini" data-act="del" data-u="${esc(a.username)}" title="Xoá tài khoản"><i class="fa-solid fa-trash"></i></button></td></tr>`;
         }).join('') : '<tr><td colspan="8" class="lz-muted">Không có tài khoản nào khớp.</td></tr>';
+    }
+    function aiCell(a) {
+        const st = a.state || {};
+        const rows = [['Gemini', st.google], ['ChatGPT', st.chatgpt], ['Claude', st.claude]].filter(r => r[1]);
+        if (!rows.length) return a.last_login ? '<span class="lz-muted">chưa báo</span>' : '—';
+        return rows.map(r => `<div class="ai-acc"><span class="ai-tag">${r[0]}</span> ${r[1] === 'chưa đăng nhập' ? '<span class="lz-muted">chưa đăng nhập</span>' : esc(r[1])}</div>`).join('');
     }
     function ipCell(a) {
         if (!a.ip) return '<span class="lz-muted">—</span>';

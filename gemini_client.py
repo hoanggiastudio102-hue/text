@@ -176,6 +176,8 @@ _LIMIT_PATTERNS = [
     r"(đã đạt|vượt quá|hết).{0,40}(giới hạn|lượt)",
     r"try again (later|tomorrow)",
     r"something went wrong",
+    r"usage limit", r"hit (the|your).{0,30}limit", r"out of (free )?messages", r"giới hạn sử dụng",
+    r"too many (requests|messages)",
     r"đã xảy ra lỗi",
 ]
 

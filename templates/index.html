@@ -38,6 +38,7 @@
             <button class="tab-btn" data-tab="tab-yt"><i class="fa-brands fa-youtube"></i> YouTube → Text</button>
             <button class="tab-btn active" data-tab="tab-localize"><i class="fa-solid fa-earth-asia"></i> Tái Sáng Tạo Đa Quốc Gia</button>
             <button class="tab-btn" data-tab="tab-notebook"><i class="fa-solid fa-book-open"></i> NotebookLM</button>
+            <button class="tab-btn" data-tab="tab-ai"><i class="fa-solid fa-robot"></i> Tài Khoản AI</button>
             <button class="tab-btn" data-tab="tab-fleet"><i class="fa-solid fa-network-wired"></i> Đội Máy</button>
             <button class="tab-btn" data-tab="tab-history"><i class="fa-solid fa-clock-rotate-left"></i> Lịch Sử</button>
             <button class="tab-btn" data-tab="tab-prompts"><i class="fa-solid fa-feather"></i> Prompt</button>
@@ -609,10 +610,17 @@
                         </div>
                     </div>
 
+                    <div class="form-group">
+                        <label for="lzAi"><span><i class="fa-solid fa-robot"></i> Chạy bằng</span><a href="#" class="ai-goto lz-muted" style="font-size:12px;">quản lý tài khoản AI →</a></label>
+                        <select id="lzAi" class="glass-input ai-select" data-kind="chat">
+                            <option value="gemini">Gemini</option><option value="chatgpt">ChatGPT</option><option value="claude">Claude</option>
+                        </select>
+                    </div>
+
                     <div class="lz-checks">
-                        <label class="lz-check"><input type="checkbox" id="lzReview"> <span><b>Tự soát lại lần 2</b> — Gemini rà lỗi/thiếu ý và sửa (chất lượng cao hơn, chậm gần gấp đôi)</span></label>
+                        <label class="lz-check"><input type="checkbox" id="lzReview"> <span><b>Tự soát lại lần 2</b> — AI rà lỗi/thiếu ý và sửa (chất lượng cao hơn, chậm gần gấp đôi)</span></label>
                         <label class="lz-check"><input type="checkbox" id="lzPerLine"> <span>Mỗi dòng là một chủ đề riêng (chạy hàng loạt nhiều chủ đề; mỗi chủ đề ra file riêng)</span></label>
-                    <label class="lz-check"><input type="checkbox" id="lzDry"> <span>Chạy thử — không dùng Gemini, chỉ kiểm tra luồng và file xuất</span></label>
+                    <label class="lz-check"><input type="checkbox" id="lzDry"> <span>Chạy thử — không dùng AI, chỉ kiểm tra luồng và file xuất</span></label>
                     </div>
 
                     <div class="action-bar lz-actions">
@@ -669,6 +677,13 @@
                     <div class="form-group">
                         <label for="ytLinks"><span><i class="fa-solid fa-link icon-text"></i> Link YouTube</span><span id="ytCount" class="char-count">0 link</span></label>
                         <textarea id="ytLinks" class="glass-input" rows="8" placeholder="https://www.youtube.com/watch?v=...&#10;https://youtu.be/...&#10;https://www.youtube.com/shorts/..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="ytEngine"><span><i class="fa-solid fa-robot"></i> Chạy bằng</span><a href="#" class="ai-goto lz-muted" style="font-size:12px;">quản lý tài khoản AI →</a></label>
+                        <select id="ytEngine" class="glass-input ai-select" data-kind="yt">
+                            <option value="notebook">NotebookLM (khuyên dùng — tự đọc được video không có phụ đề)</option>
+                            <option value="chatgpt">ChatGPT</option><option value="claude">Claude</option><option value="gemini">Gemini</option>
+                        </select>
                     </div>
                     <div class="form-group">
                         <label for="ytMode"><span><i class="fa-solid fa-gauge-high"></i> Cách chạy</span></label>
@@ -903,12 +918,25 @@
 
         <!-- History Workspace -->
         <!-- ĐỘI MÁY -->
+        <div id="tab-ai" class="workspace tab-content" style="display: none;">
+            <div class="card">
+                <h2><i class="fa-solid fa-robot"></i> Tài khoản AI trên máy này</h2>
+                <p class="lz-hint">Mỗi loại AI dùng một cửa sổ Chrome riêng và đăng nhập riêng (máy sếp và từng máy nhân viên tự đăng nhập tài khoản của máy đó). Tool chạy qua web bằng gói đang trả nên không tốn thêm tiền token. Bấm <b>Đăng nhập</b> → đăng nhập trong cửa sổ Chrome hiện ra → <b>TẮT</b> cửa sổ đó là xong. Chọn AI để chạy ở ô <b>"Chạy bằng"</b> trong tab Tái Sáng Tạo và YouTube → Text.</p>
+                <div id="aiCards" class="ai-grid"><div class="lz-muted">Đang tải…</div></div>
+                <div class="lz-muted" style="margin-top:12px;">Lưu ý: ChatGPT và Claude không khuyến khích tự động hoá web — nên chạy vừa phải, tránh chạy liên tục cả ngày trên một tài khoản. Hết lượt thì Tool dừng và giữ phần đã xong; bấm "Tiếp tục" khi có lượt lại hoặc đổi sang AI khác.</div>
+            </div>
+            <div id="aiOutBox" class="card" style="display:none;margin-top:16px;">
+                <div class="lz-modal-head"><b id="aiOutTitle">Kết quả</b><button type="button" class="btn-primary" id="aiOutClose">Đóng</button></div>
+                <pre id="aiOut" class="fl-cred" style="max-height:340px;overflow:auto;white-space:pre-wrap;"></pre>
+            </div>
+        </div>
+
         <div id="tab-fleet" class="workspace tab-content" style="display: none;">
             <div class="fl-dash">
                 <div class="fl-head">
                     <div>
                         <h2><i class="fa-solid fa-network-wired"></i> Đội ngũ &amp; sản phẩm</h2>
-                        <p class="lz-hint">Mỗi nhân viên đăng nhập Gemini riêng trên máy mình · sản phẩm và báo cáo tự gửi về máy chủ</p>
+                        <p class="lz-hint">Mỗi nhân viên đăng nhập Gemini / ChatGPT / Claude riêng trên máy mình · sản phẩm và báo cáo tự gửi về máy chủ</p>
                     </div>
                     <div class="fl-head-tools">
                         <select id="flRange" class="glass-input">
@@ -967,7 +995,7 @@
                             </div>
                         </div>
                         <div class="fl-tablewrap">
-                            <table class="fl-table"><thead><tr><th>Tên đăng nhập</th><th>Tên hiển thị</th><th>Tài khoản Google trên máy</th><th>IP</th><th>Vai trò</th><th>Trạng thái</th><th>Ngày cấp</th><th>Thao tác</th></tr></thead>
+                            <table class="fl-table"><thead><tr><th>Tên đăng nhập</th><th>Tên hiển thị</th><th>Tài khoản AI trên máy</th><th>IP</th><th>Vai trò</th><th>Trạng thái</th><th>Ngày cấp</th><th>Thao tác</th></tr></thead>
                             <tbody id="flAccounts"><tr><td colspan="8" class="lz-muted">Chưa có tài khoản nào. Bấm "Cấp tài khoản".</td></tr></tbody></table>
                         </div>
                         <div class="lz-muted" style="margin-top:8px;">Nhân viên nghỉ việc: bấm <b>Khoá</b> (giữ lịch sử, mở lại được) thay vì Xoá. Quên mật khẩu: bấm <b>Đổi mật khẩu</b> (tự gõ hoặc để trống cho Tool tạo ngẫu nhiên).</div>
@@ -1151,6 +1179,7 @@
     <!-- JS -->
     <script src="{{ url_for('static', filename='script.js') }}?v={{ asset_v }}"></script>
     <script src="{{ url_for('static', filename='localize.js') }}?v={{ asset_v }}"></script>
+    <script src="{{ url_for('static', filename='ai.js') }}?v={{ asset_v }}"></script>
     <script src="{{ url_for('static', filename='fleet.js') }}?v={{ asset_v }}"></script>
     <script src="{{ url_for('static', filename='notebook.js') }}?v={{ asset_v }}"></script>
     <script src="{{ url_for('static', filename='yt.js') }}?v={{ asset_v }}"></script>

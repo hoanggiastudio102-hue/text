@@ -70,6 +70,7 @@
         fd.append('links', $('ytLinks').value);
         fd.append('style', $('ytStyle').value);
         fd.append('mode', $('ytMode').value);
+        fd.append('engine', $('ytEngine') ? $('ytEngine').value : 'notebook');
         fd.append('prompt', $('ytPrompt').value);
         fd.append('lang', $('ytLang').value);
         fd.append('extra', $('ytExtra').value);

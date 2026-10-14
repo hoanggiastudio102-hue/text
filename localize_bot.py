@@ -145,10 +145,10 @@ def process_unit(job, session, article, code, chunks):
         text = ""
         for attempt in (1, 2):
             try:
-                job.log(f"   phần {i}/{len(chunks)}: gửi Gemini{' (thử lại)' if attempt > 1 else ''}…")
+                job.log(f"   phần {i}/{len(chunks)}: gửi AI{' (thử lại)' if attempt > 1 else ''}…")
                 text = session.ask(prompt)
                 if not text.strip():
-                    raise GeminiError("Gemini trả về nội dung rỗng.")
+                    raise GeminiError("AI trả về nội dung rỗng.")
                 last_err = None
                 break
             except (GeminiLimitError, GeminiCancelled):
@@ -170,7 +170,7 @@ def process_unit(job, session, article, code, chunks):
                 have = locales.measure(text, code)
                 if have >= 0.8 * want:
                     break
-                job.log(f"   ⚠️ bản ra ngắn ({have:,}/{want:,} {unit}) — yêu cầu Gemini viết đầy đủ lại ({rnd}/2)…")
+                job.log(f"   ⚠️ bản ra ngắn ({have:,}/{want:,} {unit}) — yêu cầu AI viết đầy đủ lại ({rnd}/2)…")
                 try:
                     longer = session.ask(locales.build_expand_prompt(country, have, want, unit))
                 except (GeminiLimitError, GeminiCancelled):
@@ -546,6 +546,14 @@ def yt_open_article(job, session, article):
             job.log(f"   ⚠️ Không lấy được phụ đề trực tiếp ({err}) — để NotebookLM tự đọc video.")
         job.save()
     nb = cfg.get("nb") or {}
+    if not hasattr(session, "open_article"):          # ChatGPT/Claude/Gemini: phụ đề gửi thẳng trong chat
+        if not text:
+            raise GeminiError("Không lấy được phụ đề của video này — ChatGPT/Claude không tự xem được video. "
+                              "Chạy video này bằng NotebookLM.")
+        if getattr(session, "article_id", None) is not None:
+            session.new_chat()
+        session.article_id = article["id"]
+        return
     from notebook_client import BASE_CHAT_RULES
     rules = (BASE_CHAT_RULES + "\n\n" + (nb.get("chat_rules") or "")).strip()
     title = f"{article['name']} | YouTube → Text"
@@ -571,7 +579,10 @@ YT_PART_BY_MODE = {"fast": 10 ** 9, "auto": 30000, "full": None}    # None = YT_
 
 def yt_part_size(cfg):
     v = YT_PART_BY_MODE.get(((cfg.get("nb") or {}).get("yt_mode") or "auto"), 30000)
-    return YT_PART_CHARS if v is None else v
+    v = YT_PART_CHARS if v is None else v
+    if cfg.get("engine") == "ytchat":      # phụ đề gửi thẳng trong ô chat -> mỗi lần tối đa ~30.000 ký tự
+        v = min(v, 30000)
+    return v
 
 
 def yt_marker(i, n):
@@ -647,8 +658,19 @@ def process_unit_yt(job, session, article, code):
     if len(parts) > 1:
         job.log(f"   Phụ đề dài {len(src):,} ký tự — chia {len(parts)} phần để viết đầy đủ.")
     outs, failed_parts = [], []
+    chat = not hasattr(session, "open_article")
+    if chat:
+        base = base.replace(f"Nguồn \"{article['name']}\" là", "Văn bản dưới đây là", 1)
     for i, part in enumerate(parts, start=1):
-        if len(parts) == 1:
+        if chat:
+            if len(parts) == 1:
+                prompt = base + f"\n\nPHỤ ĐỀ:\n<<<\n{part}\n>>>"
+            else:
+                prompt = (base + f"\n\nVideo dài nên gửi theo từng phần. Đây là PHẦN {i}/{len(parts)} của phụ đề — chỉ viết "
+                          "phần này, đầy đủ từ câu đầu tới câu cuối, nối mạch với phần trước, không mở đầu hay kết luận riêng "
+                          f"cho phần.\n\nPHỤ ĐỀ PHẦN {i}/{len(parts)}:\n<<<\n{part}\n>>>")
+                job.log(f"   phần {i}/{len(parts)} ({len(part):,} ký tự phụ đề)…")
+        elif len(parts) == 1:
             prompt = base
         else:
             words = part.split()
@@ -666,7 +688,7 @@ def process_unit_yt(job, session, article, code):
                 if t.strip():
                     err = None
                     break
-                raise GeminiError("NotebookLM trả về nội dung rỗng.")
+                raise GeminiError("AI trả về nội dung rỗng.")
             except (GeminiLimitError, GeminiCancelled):
                 raise
             except Exception as e:
@@ -678,7 +700,7 @@ def process_unit_yt(job, session, article, code):
             if len(parts) == 1:
                 raise err if isinstance(err, GeminiError) else GeminiError(str(err))
             job.log(f"   ⏭️ bỏ qua phần {i}/{len(parts)} (lỗi), làm tiếp phần sau.")
-            outs.append(f"[THIẾU PHẦN {i}/{len(parts)} — NotebookLM lỗi, cần làm lại phần này]")
+            outs.append(f"[THIẾU PHẦN {i}/{len(parts)} — AI lỗi, cần làm lại phần này]")
             failed_parts.append(i)
             res["chunks_done"] = i
             job.save()
@@ -839,7 +861,8 @@ def run_job(job_dir, session_factory=None):
                 r["status"] = "pending"
                 todo.append((a, code))
 
-    is_nb = cfg.get("engine") == "notebook"
+    is_nb = cfg.get("engine") in ("notebook", "ytchat")      # ytchat = YouTube → Text chạy bằng ChatGPT/Claude/Gemini
+    ai_name = {"chatgpt": "ChatGPT", "claude": "Claude"}.get(cfg.get("ai"), "NotebookLM" if cfg.get("engine") == "notebook" else "Gemini")
     if session_factory is None:
         if is_nb and cfg.get("dry_run"):
             session_factory = lambda: DryNotebook(log=job.log, on_tick=job.beat, should_cancel=job.cancelled)
@@ -852,6 +875,10 @@ def run_job(job_dir, session_factory=None):
                 profile_name=cfg.get("profile") or "gemini_profile", fixed_sources=nb.get("fixed_sources") or [],
                 label=" / ".join(x for x in (nb.get("folder"), nb.get("type")) if x),
                 log=job.log, on_tick=job.beat, should_cancel=job.cancelled)
+        elif cfg.get("ai") in ("chatgpt", "claude"):
+            from web_chat import WebChatSession
+            session_factory = lambda: WebChatSession(cfg["ai"], model=cfg.get("model") or "", log=job.log,
+                                                     on_tick=job.beat, should_cancel=job.cancelled)
         else:
             session_factory = lambda: GeminiSession(
                 profile_name=cfg.get("profile") or "gemini_profile", model=cfg.get("model"),
@@ -861,8 +888,8 @@ def run_job(job_dir, session_factory=None):
     chunk_cache = {}
     try:
         if todo:
-            job.log(f"Bắt đầu job {cfg['id'][:8]}: {len(todo)} mục (bài × quốc gia), model: "
-                    f"{'(chạy thử)' if cfg.get('dry_run') else cfg.get('model')}")
+            job.log(f"Bắt đầu job {cfg['id'][:8]}: {len(todo)} mục (bài × quốc gia), AI: {ai_name}, model: "
+                    f"{'(chạy thử)' if cfg.get('dry_run') else (cfg.get('model') or 'theo web')}")
             session = session_factory()
             session.start()
             first = True
@@ -894,8 +921,8 @@ def run_job(job_dir, session_factory=None):
                     break
                 except GeminiLimitError as e:
                     cfg["results"][key].update(status="error", error=str(e))
-                    cfg["error"] = ("Gemini báo hết lượt/giới hạn. Phần đã xong vẫn được giữ — "
-                                    "bấm 'Tiếp tục' khi lượt được làm mới.")
+                    cfg["error"] = (f"{ai_name} báo hết lượt/giới hạn. Phần đã xong vẫn được giữ — "
+                                    "bấm 'Tiếp tục' khi lượt được làm mới (hoặc đổi sang AI khác rồi chạy lại).")
                     job.log(f"⛔ {e}")
                     break
                 except GeminiError as e:

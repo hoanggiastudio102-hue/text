@@ -443,7 +443,8 @@ def heartbeat(dev_id, state, ip=""):
         if not d or d.get("revoked"):
             return False
         d["last_seen"] = time.time()
-        d["state"] = {k: state.get(k) for k in ("gemini_logged_in", "model", "job", "version", "os", "google")
+        d["state"] = {k: state.get(k) for k in ("gemini_logged_in", "model", "job", "version", "os", "google",
+                                                    "chatgpt", "claude")
                       if k in state}
         if ip:
             d["ip"] = ip
