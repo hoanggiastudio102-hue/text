@@ -810,3 +810,5 @@ select.glass-input option {
 .pe-manual .btn-glow { margin-top: 6px; }
 .pe-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .pe-foot { font-size: 12px; margin-top: 6px; }
+
+.ai-need { outline: 2px solid #ef4444 !important; box-shadow: 0 0 0 4px rgba(239,68,68,.25) !important; }

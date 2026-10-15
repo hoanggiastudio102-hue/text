@@ -47,7 +47,7 @@
                         <option value="line">Mỗi dòng là 1 mục (chủ đề, tiêu đề, từ khoá…)</option>
                         <option value="all">Cả ô là 1 mục</option>
                     </select>
-                    <textarea id="${P}Items" class="glass-input" rows="9" placeholder="Bài 1 …&#10;---&#10;Bài 2 …"></textarea>
+                    <textarea id="${P}Items" class="glass-input" rows="9" placeholder="Dán nội dung cần xử lý vào đây (chữ mờ này chỉ là ví dụ), VD:&#10;Bài 1 …&#10;---&#10;Bài 2 …"></textarea>
                     <input type="file" id="${P}Files" multiple accept=".txt,.md,.csv,.srt" class="glass-input" style="margin-top:6px;">
                     <div class="lz-muted" style="font-size:12px;">Hoặc chọn nhiều file .txt — mỗi file là 1 mục, tên file thành tên kết quả.</div>
                 </div>
@@ -173,12 +173,14 @@
         $('CNone').addEventListener('click', () => { selected.clear(); renderCountries(); save(); });
 
         // ---- tài khoản ----
+        let loginState = 'unknown';
         async function loadAccount() {
             try {
                 const d = await jget('/api/ai/accounts');
                 const p = (d.providers || []).find((x) => x.provider === ai) || {};
                 const a = p.account || {};
                 const who = [a.name, a.email ? '(' + a.email + ')' : ''].filter(Boolean).join(' ');
+                loginState = who ? 'yes' : (a.logged_in === false || !p.has_profile ? 'no' : 'unknown');
                 $('Acc').innerHTML = who ? `<span class="ai-ok"><i class="fa-solid fa-circle-check"></i> ${esc(who)}</span>`
                     : `<span class="gm-warn">${NAME} chưa đăng nhập trên máy này</span>`;
                 $('Model').textContent = '· model: ' + (p.model || 'theo web');
@@ -190,7 +192,16 @@
         $('Form').addEventListener('submit', async (e) => {
             e.preventDefault();
             if (!$('Prompt').value.trim()) return toast('Hãy nhập câu lệnh hoặc chọn câu lệnh mẫu.', true);
-            if (!countItems()) return toast('Chưa có mục nào.', true);
+            if (!countItems()) {
+                const box = $('Items');
+                box.classList.add('ai-need'); setTimeout(() => box.classList.remove('ai-need'), 2500);
+                box.scrollIntoView({ behavior: 'smooth', block: 'center' }); box.focus();
+                return toast('Ô "Danh sách mục" đang trống — chữ mờ "Bài 1 … --- Bài 2" chỉ là ví dụ. Dán nội dung cần xử lý vào ô đó (hoặc chọn file .txt) rồi bấm Chạy.', true);
+            }
+            if (!$('Dry').checked && loginState === 'no') {
+                toast(`${NAME} chưa đăng nhập trên máy chạy tool — vào tab "Tài Khoản AI" bấm Đăng nhập ${NAME} trước.`, true);
+                return;
+            }
             const fd = new FormData();
             fd.append('ai', ai);
             fd.append('prompt', $('Prompt').value);
